@@ -1295,7 +1295,7 @@ export default function App() {
                              value={billForm.noBast} 
                              onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
                              className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
-                             placeholder="Misal: BAST/001/2026" 
+                             placeholder="BAST-..." 
                            />
                         </div>
                         <div className="md:col-span-4">
@@ -1615,7 +1615,6 @@ export default function App() {
                            <>
                              <Search size={48} className="mx-auto mb-4 opacity-30" />
                              <p className="font-medium text-lg">Silakan ketik nomor PO di kolom pencarian.</p>
-                             <p className="text-sm mt-2 opacity-70">Data PO hanya akan muncul saat dicari agar tampilan lebih rapi.</p>
                            </>
                         ) : (
                            <>
@@ -1651,7 +1650,7 @@ export default function App() {
                       value={searchTerm} 
                       onChange={e => setSearchTerm(e.target.value)} 
                       className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-sm focus:ring-4 focus:ring-blue-100 outline-none bg-white font-medium" 
-                      placeholder="Cari Uraian atau PO..." 
+                      placeholder="Cari Tagihan..." 
                     />
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4">
@@ -1864,7 +1863,7 @@ function LocationAutocomplete({ value, options, onChange }) {
         onChange={e => { onChange(e.target.value); setOpen(true); }} 
         onFocus={() => setOpen(true)} 
         className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-        placeholder="Ketik lokasi..." 
+        placeholder="Cari lokasi..." 
       />
       {open && filtered.length > 0 && (
         <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-48 overflow-y-auto main-scroll">
