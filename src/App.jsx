@@ -1071,7 +1071,6 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-4 gap-4">
                     <div>
                       <h3 className="font-bold text-slate-800 text-lg">Serapan Anggaran PO</h3>
-                      <p className="text-sm text-slate-500">Perbandingan total nilai kontrak PO aktif dengan total tagihan yang sudah diinput.</p>
                     </div>
                     <div className="text-right">
                       <span className="text-3xl font-black text-slate-800 leading-none">{persentaseSerapan.toFixed(1)}%</span>
