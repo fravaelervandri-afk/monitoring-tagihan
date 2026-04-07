@@ -941,7 +941,6 @@ export default function App() {
               e.target.src = "https://via.placeholder.com/150x40/0f172a/ffffff?text=ELNUSA+PETROFIN";
             }}
           />
-          <span className="font-black text-slate-400 text-[10px] tracking-widest uppercase mt-2 ml-1">Monitor Tagihan</span>
         </div>
         
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto scrollbar-hide pb-6">
