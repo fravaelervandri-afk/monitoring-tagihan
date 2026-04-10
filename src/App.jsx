@@ -7,7 +7,7 @@ import {
   Monitor, Home, CalendarClock, History, Database,
   FileText, FilePlus, FileEdit, Clock, AlertTriangle, 
   CheckCircle, Trash2, Plus, UploadCloud, FileSpreadsheet, Save, X, Search,
-  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight
+  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, User
 } from 'lucide-react';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -24,6 +24,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('tab-home'); 
   const [notification, setNotification] = useState(null);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
+
+  // State untuk Accordion Menu di Sidebar
+  const [sidebarMenu, setSidebarMenu] = useState({ po: true, tagihan: true });
+
+  const toggleSidebarMenu = (menu) => {
+    setSidebarMenu(prev => ({ ...prev, [menu]: !prev[menu] }));
+  };
 
   // State utama data dari Database
   const [pos, setPos] = useState([]);
@@ -109,7 +116,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-      showNotif('Gagal mengambil data dari Supabase.', 'error');
+      showNotif('Gagal mengambil data dari sistem.', 'error');
     } finally {
       setIsLoadingDB(false);
     }
@@ -818,13 +825,24 @@ export default function App() {
   // ==========================================
   // GET PAGE TITLE UNTUK HEADER KONTEKSTUAL
   // ==========================================
-  const getPageTitle = () => {
+  const getBreadcrumbs = () => {
     switch(activeTab) {
-      case 'tab-home': return 'DASHBOARD TAGIHAN';
+      case 'tab-home': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Dashboard</span></>;
+      case 'tab-master-po': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> PO <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Data PO</span></>;
+      case 'tab-data-tagihan': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> Tagihan <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Data Tagihan</span></>;
+      case 'tab-input-tagihan': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> Tagihan <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Tagihan Baru</span></>;
+      case 'tab-input-po': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> PO <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">PO Baru</span></>;
+      default: return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda</>;
+    }
+  };
+
+  const getPageTitleString = () => {
+    switch(activeTab) {
+      case 'tab-home': return 'Dashboard Monitoring';
       case 'tab-master-po': return 'Rekap Data PO';
       case 'tab-data-tagihan': return 'Rekap Data Tagihan';
-      case 'tab-input-tagihan': return 'Input Tagihan';
-      case 'tab-input-po': return 'Input PO';
+      case 'tab-input-tagihan': return 'Input Tagihan Baru';
+      case 'tab-input-po': return 'Input PO Baru';
       default: return 'Aplikasi Monitoring';
     }
   };
@@ -832,11 +850,14 @@ export default function App() {
   // Loading Screen Database
   if (isLoadingDB) {
     return (
-      <div className="h-screen w-full bg-slate-900 flex flex-col items-center justify-center text-white" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+      <div className="h-screen w-full bg-slate-50 flex flex-col items-center justify-center text-slate-800" style={{ fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
         <Monitor size={48} className="text-blue-500 animate-pulse mb-6" />
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-semibold text-slate-300">Menghubungkan ke Supabase Cloud...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-semibold text-slate-600 tracking-wide uppercase text-[13px]">Memuat Sistem Monitoring...</p>
+          </div>
+          <p className="text-xs text-slate-400">Menyiapkan dashboard dan basis data Anda</p>
         </div>
       </div>
     );
@@ -846,7 +867,7 @@ export default function App() {
   // RENDER UI UTAMA
   // ==========================================
   return (
-    <div className="bg-slate-50 text-slate-800 flex h-screen w-full overflow-hidden" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+    <div className="bg-slate-50 text-slate-800 flex flex-col h-screen w-full overflow-hidden" style={{ fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
       
       {/* GLOBAL NOTIFICATION */}
       {notification && (
@@ -865,955 +886,983 @@ export default function App() {
             </div>
             <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
                {/* Read Only Data (PO & Lokasi) */}
-               <div className="bg-slate-100 p-3 rounded-lg flex items-center gap-4 text-sm mb-4">
+               <div className="bg-slate-100 p-3 rounded-lg flex items-center gap-4 text-[13px] mb-4">
                  <div className="flex-1">
-                   <span className="block text-xs text-slate-500 font-bold mb-0.5">Referensi PO (Terkunci)</span>
-                   <span className="font-medium text-slate-700">{editingBill.hasPo ? editingBill.poNumber : 'TANPA PO (Pengecualian)'}</span>
+                   <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Referensi PO (Terkunci)</span>
+                   <span className="font-semibold text-slate-700">{editingBill.hasPo ? editingBill.poNumber : 'TANPA PO (Pengecualian)'}</span>
                  </div>
                  {editingBill.hasPo && (
                    <div className="flex-1">
-                     <span className="block text-xs text-slate-500 font-bold mb-0.5">Lokasi / Periode (Terkunci)</span>
-                     <span className="font-medium text-slate-700">{editingBill.locationName} {editingBill.period && `(${editingBill.period})`}</span>
+                     <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Lokasi / Periode (Terkunci)</span>
+                     <span className="font-semibold text-slate-700">{editingBill.locationName} {editingBill.period && `(${editingBill.period})`}</span>
                    </div>
                  )}
                </div>
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Judul Tagihan</label>
+                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Judul Tagihan</label>
                     <input 
                         type="text" 
                         required 
                         value={editingBill.title} 
                         onChange={e => setEditingBill({...editingBill, title: e.target.value})} 
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 mb-1">No. BAST (Opsional)</label>
+                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">No. BAST (Opsional)</label>
                     <input 
                         type="text" 
                         value={editingBill.noBast === '-' ? '' : editingBill.noBast} 
                         onChange={e => setEditingBill({...editingBill, noBast: e.target.value})} 
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Nominal Tagihan (Rp)</label>
+                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nominal Tagihan (Rp)</label>
                     <input 
                         type="text" 
                         required 
                         value={editingBill.amount} 
                         onChange={e => setEditingBill({...editingBill, amount: formatInputNumber(e.target.value)})} 
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm font-bold" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold" 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Approval</label>
+                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Tanggal Approval</label>
                     <input 
                         type="date" 
                         required 
                         value={editingBill.date} 
                         onChange={e => setEditingBill({...editingBill, date: e.target.value})} 
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
                     />
                   </div>
                </div>
                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                 <button type="button" onClick={() => setEditingBill(null)} className="px-5 py-2 text-slate-500 font-medium hover:bg-slate-100 rounded-lg transition-colors">Batal</button>
-                 <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-colors flex items-center gap-2"><Save size={16}/> Simpan Perubahan</button>
+                 <button type="button" onClick={() => setEditingBill(null)} className="px-5 py-2 text-[13px] text-slate-500 font-semibold hover:bg-slate-100 rounded-lg transition-colors">Batal</button>
+                 <button type="submit" className="px-6 py-2 text-[13px] bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-colors flex items-center gap-2"><Save size={16}/> Simpan Perubahan</button>
                </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* SIDEBAR KIRI */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-20">
-        <div className="flex flex-col px-6 py-6 border-b border-slate-800 mb-4 gap-1">
-          <img 
-            src="/logo-elnusa.png" 
-            alt="Elnusa Petrofin" 
-            className="h-14 w-auto object-contain object-left"
-            onError={(e) => {
-              // Fallback jika gambar lokal belum ada saat simulasi
-              e.target.onerror = null;
-              e.target.src = "https://via.placeholder.com/150x40/0f172a/ffffff?text=ELNUSA+PETROFIN";
-            }}
-          />
-        </div>
-        
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto scrollbar-hide pb-6">
-          <SidebarButton 
-            id="tab-home" 
-            icon={<Home size={18} />} 
-            label="Dashboard" 
-            activeTab={activeTab} 
-            onClick={setActiveTab} 
-          />
-          
-          <div className="pt-6 pb-2 px-4 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
-            Data Master
+      <div className="flex flex-1 overflow-hidden">
+        {/* SIDEBAR KIRI (LIGHT THEME) */}
+        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col z-20">
+          <div className="flex flex-col px-6 py-4 mb-4">
+            <img 
+              src="/logo-elnusa.png" 
+              alt="Logo ELnusa" 
+              className="h-10 w-auto object-contain object-left"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "https://via.placeholder.com/150x40/ffffff/0f172a?text=MONITOR+TAGIHAN";
+              }}
+            />
           </div>
-          <SidebarButton 
-            id="tab-master-po" 
-            icon={<Database size={18} />} 
-            label="Data PO" 
-            activeTab={activeTab} 
-            onClick={setActiveTab} 
-          />
-          <SidebarButton 
-            id="tab-data-tagihan" 
-            icon={<FileText size={18} />} 
-            label="Data Tagihan" 
-            activeTab={activeTab} 
-            onClick={setActiveTab} 
-          />
           
-          <div className="pt-6 pb-2 px-4 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
-            Input
-          </div>
-          <SidebarButton 
-            id="tab-input-po" 
-            icon={<FileEdit size={18} />} 
-            label="PO Baru" 
-            activeTab={activeTab} 
-            onClick={setActiveTab} 
-          />
-          <SidebarButton 
-            id="tab-input-tagihan" 
-            icon={<FilePlus size={18} />} 
-            label="Tagihan Baru" 
-            activeTab={activeTab} 
-            onClick={setActiveTab} 
-          />
-        </nav>
-      </aside>
+          <nav className="flex-1 px-4 space-y-1 overflow-y-auto scrollbar-hide pb-6">
+            
+            {/* Dashboard Standalone */}
+            <div>
+              <button 
+                onClick={() => setActiveTab('tab-home')} 
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl w-full transition-all duration-200 
+                  ${activeTab === 'tab-home' 
+                    ? 'bg-blue-50 text-blue-600 font-bold' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-blue-600 font-medium'}`}
+              >
+                <Home size={18} /> <span className="text-[13px] font-semibold">Dashboard</span>
+              </button>
+            </div>
 
-      {/* KONTEN UTAMA KANAN */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
-        
-        {/* HEADER TOPBAR KONTEKSTUAL (BORDERLESS) */}
-        <header className="h-20 bg-slate-50 flex items-center justify-between px-8 flex-shrink-0 z-10">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">{getPageTitle()}</h2>
-          </div>
-          <div className="flex items-center gap-6">
-            <button className="text-slate-400 hover:text-blue-600 transition-colors relative cursor-pointer">
-               <Bell size={20} />
-               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-50"></span>
-            </button>
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-200 cursor-pointer group">
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">RTC Support</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Admin</p>
-              </div>
-              <div className="h-10 w-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shadow-sm group-hover:shadow-md transition-all">
-                RS
+            {/* Accordion: PO */}
+            <div className="pt-1">
+              <button 
+                onClick={() => toggleSidebarMenu('po')} 
+                className="flex items-center justify-between px-4 py-2.5 rounded-xl w-full text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                   <Database size={18} className="text-slate-500" /> <span className="text-[13px]">Data PO</span>
+                </div>
+                {sidebarMenu.po ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+              </button>
+              
+              {sidebarMenu.po && (
+                <div className="mt-1 space-y-1 pl-4">
+                  <SidebarSubButton id="tab-master-po" label="Daftar PO" activeTab={activeTab} onClick={setActiveTab} />
+                  <SidebarSubButton id="tab-input-po" label="Input PO Baru" activeTab={activeTab} onClick={setActiveTab} />
+                </div>
+              )}
+            </div>
+
+            {/* Accordion: Tagihan */}
+            <div className="pt-1">
+              <button 
+                onClick={() => toggleSidebarMenu('tagihan')} 
+                className="flex items-center justify-between px-4 py-2.5 rounded-xl w-full text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                   <FileText size={18} className="text-slate-500" /> <span className="text-[13px]">Data Tagihan</span>
+                </div>
+                {sidebarMenu.tagihan ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+              </button>
+              
+              {sidebarMenu.tagihan && (
+                <div className="mt-1 space-y-1 pl-4">
+                  <SidebarSubButton id="tab-data-tagihan" label="Daftar Tagihan" activeTab={activeTab} onClick={setActiveTab} />
+                  <SidebarSubButton id="tab-input-tagihan" label="Input Tagihan Baru" activeTab={activeTab} onClick={setActiveTab} />
+                </div>
+              )}
+            </div>
+
+          </nav>
+        </aside>
+
+        {/* KONTEN UTAMA KANAN */}
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+          
+          {/* HEADER TOPBAR KONTEKSTUAL (LIGHT, BREADCRUMBS) */}
+          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-10">
+            <div className="text-[13px] text-slate-500 font-medium flex items-center">
+              {getBreadcrumbs()}
+            </div>
+            
+            <div className="flex items-center gap-5">
+              <button className="text-slate-400 hover:text-blue-600 transition-colors relative cursor-pointer">
+                 <Bell size={18} />
+                 <span className="absolute 1px right-0.5 w-2 h-2 bg-rose-500 rounded-full"></span>
+              </button>
+              <div className="flex items-center gap-3 cursor-pointer group">
+                <div className="text-right hidden md:block">
+                  <p className="text-[13px] font-bold text-slate-700 group-hover:text-blue-600 transition-colors">RTC Support</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Elnusa Petrofin</p>
+                </div>
+                {/* Ikon Profil Minimalis */}
+                <div className="h-9 w-9 bg-slate-50 border border-slate-200 text-slate-400 rounded-full flex items-center justify-center shadow-sm group-hover:shadow transition-all group-hover:text-blue-500 group-hover:border-blue-200">
+                  <User size={18} />
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* AREA SCROLL KONTEN */}
-        <div className="flex-1 overflow-y-auto main-scroll px-8 pb-8">
-          <div className="max-w-5xl mx-auto">
-            
-            {/* TAB: DASHBOARD HOME */}
-            {activeTab === 'tab-home' && (
-              <div className="animate-tab space-y-6">
-                
-                {/* Baris Atas: 4 KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-                  <div className="bg-white border border-slate-200 p-5 lg:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group" 
-                       onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('berjalan'); setCurrentPage(1); }}>
-                    <div className="flex justify-between items-start mb-2 lg:mb-4">
-                       <h3 className="text-slate-500 font-bold text-[10px] tracking-widest uppercase">Tagihan Berjalan</h3>
-                       <div className="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:scale-110 transition-transform"><CalendarClock size={16}/></div>
-                    </div>
-                    <div className="text-lg lg:text-xl font-black text-blue-900 truncate tracking-tight" title={formatRupiah(totalBerjalan)}>{formatRupiah(totalBerjalan)}</div>
-                    <div className="text-[10px] lg:text-xs text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-blue-600 font-bold">{berjalanBills.length}</span> Dokumen</div>
-                  </div>
+          {/* AREA SCROLL KONTEN */}
+          <div className="flex-1 overflow-y-auto main-scroll px-8 pb-8 pt-6">
+            <div className="max-w-6xl mx-auto">
+              
+              {/* Main Content Title */}
+              <h2 className="text-[22px] font-bold text-slate-800 mb-6">{getPageTitleString()}</h2>
+
+              {/* TAB: DASHBOARD HOME */}
+              {activeTab === 'tab-home' && (
+                <div className="animate-tab space-y-6">
                   
-                  <div className="bg-white border border-slate-200 p-5 lg:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group" 
-                       onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('backdate'); setCurrentPage(1); }}>
-                    <div className="flex justify-between items-start mb-2 lg:mb-4">
-                       <h3 className="text-slate-500 font-bold text-[10px] tracking-widest uppercase">Tunggakan Backdate</h3>
-                       <div className="p-2 bg-amber-50 rounded-lg text-amber-600 group-hover:scale-110 transition-transform"><History size={16}/></div>
-                    </div>
-                    <div className="text-lg lg:text-xl font-black text-amber-900 truncate tracking-tight" title={formatRupiah(totalBackdate)}>{formatRupiah(totalBackdate)}</div>
-                    <div className="text-[10px] lg:text-xs text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-amber-600 font-bold">{backdateBills.length}</span> Dokumen</div>
-                  </div>
-
-                  <div className="bg-white border border-slate-200 p-5 lg:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all group" 
-                       onClick={() => { setActiveTab('tab-master-po'); }}>
-                    <div className="flex justify-between items-start mb-2 lg:mb-4">
-                       <h3 className="text-slate-500 font-bold text-[10px] tracking-widest uppercase">Total Kontrak PO</h3>
-                       <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 group-hover:scale-110 transition-transform"><Database size={16}/></div>
-                    </div>
-                    <div className="text-lg lg:text-xl font-black text-emerald-900 truncate tracking-tight" title={formatRupiah(totalNilaiPO)}>{formatRupiah(totalNilaiPO)}</div>
-                    <div className="text-[10px] lg:text-xs text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-emerald-600 font-bold">{pos.length}</span> Master Aktif</div>
-                  </div>
-
-                  <div className="bg-white border border-slate-200 p-5 lg:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-rose-200 transition-all group" 
-                       onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('non-po'); setCurrentPage(1); }}>
-                    <div className="flex justify-between items-start mb-2 lg:mb-4">
-                       <h3 className="text-slate-500 font-bold text-[10px] tracking-widest uppercase">Tagihan Non-PO</h3>
-                       <div className="p-2 bg-rose-50 rounded-lg text-rose-600 group-hover:scale-110 transition-transform"><AlertTriangle size={16}/></div>
-                    </div>
-                    <div className="text-lg lg:text-xl font-black text-rose-900 truncate tracking-tight" title={formatRupiah(totalNoPo)}>{formatRupiah(totalNoPo)}</div>
-                    <div className="text-[10px] lg:text-xs text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-rose-600 font-bold">{noPoBills.length}</span> Pengecualian</div>
-                  </div>
-                </div>
-
-                {/* Baris Tengah: Grafik Serapan */}
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-4 gap-4">
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-lg">Serapan Anggaran PO</h3>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-3xl font-black text-slate-800 leading-none">{persentaseSerapan.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden mb-3">
-                     <div className={`h-full transition-all duration-1000 ${persentaseSerapan > 90 ? 'bg-rose-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(persentaseSerapan, 100)}%` }}></div>
-                  </div>
-                  <div className="flex justify-between text-xs font-semibold">
-                     <span className="text-blue-600 truncate mr-2" title={`Terpakai: ${formatRupiah(totalDitagihkan)}`}>Terpakai: {formatRupiah(totalDitagihkan)}</span>
-                     <span className="text-emerald-600 truncate text-right" title={`Sisa Anggaran: ${formatRupiah(sisaNilaiPO)}`}>Sisa: {formatRupiah(sisaNilaiPO)}</span>
-                  </div>
-                </div>
-
-                {/* Baris Bawah: Panel Atensi & Aktivitas */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                   {/* Kolom Kiri: PO Kritis */}
-                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
-                      <h3 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2">
-                         <AlertTriangle size={20} className="text-amber-500" /> Butuh Atensi (PO Kritis)
-                      </h3>
-                      <div className="space-y-3 flex-1">
-                         {poKritis.length > 0 ? poKritis.slice(0, 4).map((pk, idx) => (
-                            <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer hover:border-amber-200 hover:shadow-sm transition-all" onClick={() => {setSearchPOQuery(pk.poNumber); setActiveTab('tab-master-po');}}>
-                               <div className="overflow-hidden pr-2">
-                                  <div className="font-bold text-slate-800 text-sm mb-1 truncate">{pk.poNumber}</div>
-                                  <div className="text-xs text-slate-500 truncate">{pk.location.name}</div>
-                                  {pk.stats.isShortageWarning && (
-                                      <div className="inline-flex items-center gap-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md font-bold mt-2">
-                                          <AlertTriangle size={10} /> Potensi PO Additional!
-                                      </div>
-                                  )}
-                               </div>
-                               <div className="text-right whitespace-nowrap">
-                                  <div className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
-                                    Sisa {pk.location.totalQuota - pk.location.usedQuota}x Tagih
-                                  </div>
-                               </div>
-                            </div>
-                         )) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
-                               <CheckCircle size={32} className="mb-3 opacity-50" />
-                               <span className="text-sm font-medium">Semua kuota PO masih aman.</span>
-                            </div>
-                         )}
+                  {/* Baris Atas: 4 KPI Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group" 
+                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('berjalan'); setCurrentPage(1); }}>
+                      <div className="flex justify-between items-start mb-2 lg:mb-4">
+                         <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tagihan Berjalan</h3>
+                         <div className="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:scale-110 transition-transform"><CalendarClock size={16}/></div>
                       </div>
-                   </div>
-
-                   {/* Kolom Kanan: Tagihan Terbaru */}
-                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
-                      <h3 className="font-bold text-slate-800 text-lg mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
-                         <History size={20} className="text-blue-500" /> Histori Tagihan Masuk
-                      </h3>
-                      <div className="space-y-3 flex-1 overflow-y-auto pr-2 main-scroll max-h-[300px]">
-                         {tagihanTerakhir.length > 0 ? tagihanTerakhir.map(b => (
-                            <div key={b.id} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group" 
-                                 onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('all'); setSearchTerm(b.title); setCurrentPage(1); }}>
-                               <div className="flex justify-between items-start mb-2">
-                                  <div className="font-bold text-sm text-slate-800 truncate pr-4 group-hover:text-blue-600 transition-colors" title={b.title}>{b.title}</div>
-                                  <div className="font-black text-sm text-slate-800 whitespace-nowrap">{formatRupiah(b.amount)}</div>
-                               </div>
-                               <div className="flex items-center justify-between">
-                                  <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5"><CalendarClock size={12} className="text-slate-400" /> {new Date(b.date).toLocaleDateString('id-ID')}</span>
-                                  <span className={`text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase ${b.hasPo ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                                     {b.hasPo ? b.poNumber : 'NON-PO'}
-                                  </span>
-                               </div>
-                            </div>
-                         )) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-500 py-8">
-                               <span className="text-sm font-medium">Belum ada tagihan diinput.</span>
-                            </div>
-                         )}
-                      </div>
-                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: INPUT TAGIHAN */}
-            {activeTab === 'tab-input-tagihan' && (
-              <div className="animate-tab">
-                <form onSubmit={handleSaveBill} className="bg-white rounded-3xl border shadow-sm overflow-hidden mt-2">
-                  <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-                    <input 
-                      type="checkbox" 
-                      checked={!billForm.hasPo} 
-                      onChange={(e) => setBillForm({
-                        ...billForm, 
-                        hasPo: !e.target.checked, 
-                        poNumber: '', 
-                        locationId: '', 
-                        selectedPeriod: ''
-                      })} 
-                      className="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" 
-                      id="non-po" 
-                    />
-                    <label htmlFor="non-po" className="font-bold text-slate-700 cursor-pointer">
-                      Tagihan Non-PO (Pengecualian)
-                    </label>
-                    {!billForm.hasPo && <AlertTriangle className="text-rose-500 animate-pulse hidden sm:block ml-2" size={20} />}
-                  </div>
-                  
-                  <div className="p-6 space-y-6">
-                    {/* BAGIAN REFERENSI PO (JIKA ADA) */}
-                    {billForm.hasPo && (
-                      <div className="p-5 rounded-xl bg-blue-50 border border-blue-100 space-y-4">
-                        <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2 border-b border-blue-200/50 pb-2">
-                          <Database size={16}/> Pemotongan Kuota & Referensi PO
-                        </h4>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-600 mb-1">Cari Master PO</label>
-                            <POAutocomplete 
-                              value={billForm.poNumber} 
-                              options={pos.map(p => p.poNumber)} 
-                              onChange={(v) => setBillForm({
-                                ...billForm, 
-                                poNumber: v, 
-                                locationId: '', 
-                                selectedPeriod: ''
-                              })} 
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-slate-600 mb-1">Pilih Lokasi / Peruntukan</label>
-                            <ObjectAutocomplete 
-                              value={billForm.locationId} 
-                              options={activePoForBill ? activePoForBill.locations.map(l => ({ 
-                                id: l.id, 
-                                label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
-                                disabled: l.usedQuota >= l.totalQuota 
-                              })) : []} 
-                              onChange={(v) => setBillForm({
-                                ...billForm, 
-                                locationId: v, 
-                                selectedPeriod: ''
-                              })} 
-                              disabled={!billForm.poNumber} 
-                              placeholder="-- Pilih Lokasi --" 
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* TOMBOL OPSI PERIODE BULAN */}
-                        {activeLocForBill?.generatedPeriods?.length > 0 && (
-                          <div className="pt-2 animate-in fade-in zoom-in duration-300">
-                            <label className="block text-xs font-bold text-slate-600 mb-2 flex justify-between">
-                              <span>Pilih Opsi Periode Tagihan</span>
-                              <span className="text-blue-600 font-medium">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              {activeLocForBill.generatedPeriods.map((p, i) => {
-                                const isUsed = i < activeLocForBill.usedQuota;
-                                return (
-                                  <label 
-                                    key={i} 
-                                    className={`cursor-pointer px-4 py-2 rounded-lg border text-sm transition-all shadow-sm
-                                      ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
-                                      billForm.selectedPeriod === p ? 'bg-blue-600 text-white border-blue-600 font-bold scale-105' : 
-                                      'bg-white text-slate-700 border-slate-300 hover:border-blue-400 hover:bg-blue-50 font-medium'}
-                                    `}
-                                  >
-                                    <input 
-                                      type="radio" 
-                                      name="periodSelect" 
-                                      className="hidden" 
-                                      value={p} 
-                                      disabled={isUsed}
-                                      checked={billForm.selectedPeriod === p} 
-                                      onChange={(e) => setBillForm({...billForm, selectedPeriod: e.target.value})} 
-                                    />
-                                    {p} {isUsed && ' ✓'}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {activeLocForBill && (() => {
-                          const stats = getLocationStats(activeLocForBill);
-                          if (stats.isShortageWarning) {
-                            return (
-                              <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
-                                <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
-                                <div>
-                                  <h5 className="text-xs font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
-                                  <p className="text-xs text-rose-600 mt-1">
-                                    Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                      </div>
-                    )}
+                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBerjalan)}>{formatRupiah(totalBerjalan)}</div>
+                      <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-blue-600 font-bold">{berjalanBills.length}</span> Dokumen</div>
+                    </div>
                     
-                    {/* BAGIAN DATA INVOICE UMUM */}
-                    <div className="space-y-4">
-                      <h4 className="font-bold text-slate-800 text-sm border-b border-slate-200 pb-2">Data Dokumen / Invoice</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className="md:col-span-12">
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Judul / Uraian Tagihan</label>
-                          <input 
-                            type="text" 
-                            value={billForm.title} 
-                            onChange={e => setBillForm({...billForm, title: e.target.value})} 
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
-                            placeholder="Ketik uraian tagihan..." 
-                          />
-                        </div>
-                        <div className="md:col-span-8">
-                           <label className="block text-xs font-bold text-slate-600 mb-1">No. BAST (Opsional)</label>
-                           <input 
-                             type="text" 
-                             value={billForm.noBast} 
-                             onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
-                             className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
-                             placeholder="BAST-..." 
-                           />
-                        </div>
-                        <div className="md:col-span-4">
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Nominal (Rp)</label>
-                          <input 
-                            type="text" 
-                            value={billForm.amount} 
-                            onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm font-bold text-slate-800" 
-                            placeholder="0"
-                          />
-                        </div>
-                        <div className="md:col-span-6">
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Invoice</label>
-                          <input 
-                            type="date" 
-                            value={billForm.date} 
-                            onChange={e => setBillForm({...billForm, date: e.target.value})} 
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm text-slate-700" 
-                          />
-                        </div>
+                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group" 
+                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('backdate'); setCurrentPage(1); }}>
+                      <div className="flex justify-between items-start mb-2 lg:mb-4">
+                         <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tunggakan Backdate</h3>
+                         <div className="p-2 bg-amber-50 rounded-lg text-amber-600 group-hover:scale-110 transition-transform"><History size={16}/></div>
                       </div>
+                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBackdate)}>{formatRupiah(totalBackdate)}</div>
+                      <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-amber-600 font-bold">{backdateBills.length}</span> Dokumen</div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all group" 
+                         onClick={() => { setActiveTab('tab-master-po'); }}>
+                      <div className="flex justify-between items-start mb-2 lg:mb-4">
+                         <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Total Kontrak PO</h3>
+                         <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 group-hover:scale-110 transition-transform"><Database size={16}/></div>
+                      </div>
+                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNilaiPO)}>{formatRupiah(totalNilaiPO)}</div>
+                      <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-emerald-600 font-bold">{pos.length}</span> Master Aktif</div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-rose-200 transition-all group" 
+                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('non-po'); setCurrentPage(1); }}>
+                      <div className="flex justify-between items-start mb-2 lg:mb-4">
+                         <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tagihan Non-PO</h3>
+                         <div className="p-2 bg-rose-50 rounded-lg text-rose-600 group-hover:scale-110 transition-transform"><AlertTriangle size={16}/></div>
+                      </div>
+                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNoPo)}>{formatRupiah(totalNoPo)}</div>
+                      <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-rose-600 font-bold">{noPoBills.length}</span> Pengecualian</div>
                     </div>
                   </div>
-                  
-                  <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end">
-                    <button 
-                      type="submit" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
-                    >
-                      <Save size={18}/> Simpan ke Database
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
 
-            {/* TAB: INPUT PO */}
-            {activeTab === 'tab-input-po' && (
-              <div className="animate-tab">
-                <div className="flex justify-end mb-6">
-                  {/* TOGGLE INPUT MODE */}
-                  <div className="bg-slate-200 p-1.5 rounded-2xl flex gap-1 shadow-inner">
-                    <button 
-                      onClick={() => setInputMode('manual')} 
-                      className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${inputMode === 'manual' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:bg-slate-300'}`}
-                    >
-                      Input Manual
-                    </button>
-                    <button 
-                      onClick={() => setInputMode('excel')} 
-                      className={`px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:bg-slate-300'}`}
-                    >
-                      <FileSpreadsheet size={16}/> Import Excel
-                    </button>
+                  {/* Baris Tengah: Grafik Serapan */}
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-4 gap-4">
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-[16px]">Serapan Anggaran PO (Rupiah)</h3>
+                        <p className="text-[13px] text-slate-500 mt-1">Persentase nominal PO yang sudah ditagihkan ke sistem.</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-3xl font-bold text-slate-800 leading-none">{persentaseSerapan.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-3">
+                       <div className={`h-full transition-all duration-1000 ${persentaseSerapan > 90 ? 'bg-rose-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(persentaseSerapan, 100)}%` }}></div>
+                    </div>
+                    <div className="flex justify-between text-[12px] font-semibold">
+                       <span className="text-blue-600 truncate mr-2" title={`Terpakai: ${formatRupiah(totalDitagihkan)}`}>Terpakai: {formatRupiah(totalDitagihkan)}</span>
+                       <span className="text-emerald-600 truncate text-right" title={`Sisa Anggaran: ${formatRupiah(sisaNilaiPO)}`}>Sisa: {formatRupiah(sisaNilaiPO)}</span>
+                    </div>
+                  </div>
+
+                  {/* Baris Bawah: Panel Atensi & Aktivitas */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                     {/* Kolom Kiri: PO Kritis */}
+                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
+                        <h3 className="font-bold text-slate-800 text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                           <AlertTriangle size={18} className="text-amber-500" /> Butuh Atensi (PO Kritis)
+                        </h3>
+                        <div className="space-y-3 flex-1">
+                           {poKritis.length > 0 ? poKritis.slice(0, 4).map((pk, idx) => (
+                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer hover:border-amber-200 hover:shadow-sm transition-all" onClick={() => {setSearchPOQuery(pk.poNumber); setActiveTab('tab-master-po');}}>
+                                 <div className="overflow-hidden pr-2">
+                                    <div className="font-bold text-slate-800 text-[13px] mb-1 truncate">{pk.poNumber}</div>
+                                    <div className="text-[12px] text-slate-500 truncate">{pk.location.name}</div>
+                                    {pk.stats.isShortageWarning && (
+                                        <div className="inline-flex items-center gap-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md font-bold mt-2">
+                                            <AlertTriangle size={10} /> Potensi PO Additional!
+                                        </div>
+                                    )}
+                                 </div>
+                                 <div className="text-right whitespace-nowrap">
+                                    <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                                      Sisa {pk.location.totalQuota - pk.location.usedQuota}x Tagih
+                                    </div>
+                                 </div>
+                              </div>
+                           )) : (
+                              <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
+                                 <CheckCircle size={32} className="mb-3 opacity-50" />
+                                 <span className="text-[13px] font-medium">Semua kuota PO masih aman.</span>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* Kolom Kanan: Tagihan Terbaru */}
+                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
+                        <h3 className="font-bold text-slate-800 text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                           <History size={18} className="text-blue-500" /> Histori Tagihan Masuk
+                        </h3>
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-2 main-scroll max-h-[300px]">
+                           {tagihanTerakhir.length > 0 ? tagihanTerakhir.map(b => (
+                              <div key={b.id} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group" 
+                                   onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('all'); setSearchTerm(b.title); setCurrentPage(1); }}>
+                                 <div className="flex justify-between items-start mb-2">
+                                    <div className="font-bold text-[13px] text-slate-800 truncate pr-4 group-hover:text-blue-600 transition-colors" title={b.title}>{b.title}</div>
+                                    <div className="font-bold text-[13px] text-slate-800 whitespace-nowrap">{formatRupiah(b.amount)}</div>
+                                 </div>
+                                 <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5"><CalendarClock size={12} className="text-slate-400" /> {new Date(b.date).toLocaleDateString('id-ID')}</span>
+                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase ${b.hasPo ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                       {b.hasPo ? b.poNumber : 'NON-PO'}
+                                    </span>
+                                 </div>
+                              </div>
+                           )) : (
+                              <div className="h-full flex flex-col items-center justify-center text-slate-500 py-8">
+                                 <span className="text-[13px] font-medium">Belum ada tagihan diinput.</span>
+                              </div>
+                           )}
+                        </div>
+                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* MODE MANUAL PO */}
-                {inputMode === 'manual' ? (
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-6 bg-blue-50/30 border-b border-slate-100">
-                      <label className="block text-sm font-bold text-blue-900 mb-2">Nomor Induk PO</label>
+              {/* TAB: INPUT TAGIHAN */}
+              {activeTab === 'tab-input-tagihan' && (
+                <div className="animate-tab">
+                  <form onSubmit={handleSaveBill} className="bg-white rounded-3xl border shadow-sm overflow-hidden mt-2">
+                    <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
                       <input 
-                        type="text" 
-                        value={manualForm.poNumber} 
-                        onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
-                        className="w-full max-w-md px-3 py-2 rounded-lg border border-blue-200 font-bold focus:ring-2 focus:ring-blue-500 outline-none text-sm" 
-                        placeholder="Contoh: 416xxxxxxx" 
+                        type="checkbox" 
+                        checked={!billForm.hasPo} 
+                        onChange={(e) => setBillForm({
+                          ...billForm, 
+                          hasPo: !e.target.checked, 
+                          poNumber: '', 
+                          locationId: '', 
+                          selectedPeriod: ''
+                        })} 
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" 
+                        id="non-po" 
                       />
+                      <label htmlFor="non-po" className="font-bold text-[13px] text-slate-700 cursor-pointer">
+                        Tagihan Non-PO (Pengecualian)
+                      </label>
+                      {!billForm.hasPo && <AlertTriangle className="text-rose-500 animate-pulse hidden sm:block ml-2" size={18} />}
                     </div>
                     
                     <div className="p-6 space-y-6">
-                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                        <h3 className="font-bold text-slate-700">Daftar Lokasi di bawah PO ini</h3>
-                        <button 
-                          onClick={() => setManualForm(p => ({
-                            ...p, 
-                            locations: [
-                              ...p.locations,
-                              {
-                                id: `L-${Date.now()}`,
-                                name: '',
-                                value: '',
-                                totalQuota: '',
-                                startMonth: '',
-                                billingType: 'partial'
-                              }
-                            ]
-                          }))} 
-                          className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1"
-                        >
-                          <Plus size={14}/> Tambah Baris
-                        </button>
-                      </div>
-                      
-                      {/* LOOPING INPUT LOKASI */}
-                      {manualForm.locations.map((loc) => {
-                           const previewMonths = (loc.startMonth && loc.totalQuota > 0 && loc.billingType === 'partial') 
-                                ? generateMonthsArray(loc.startMonth, loc.totalQuota) : [];
-
-                           return (
-                        <div key={loc.id} className="p-5 rounded-xl border bg-slate-50/50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group border-slate-200 shadow-sm">
-                          <div className="md:col-span-5">
-                            <label className="block text-xs font-bold text-slate-600 mb-1">Lokasi</label>
-                            <LocationAutocomplete 
-                              value={loc.name} 
-                              options={availableLocationNames} 
-                              onChange={v => handleLocationChange(loc.id, 'name', v)} 
-                            />
+                      {/* BAGIAN REFERENSI PO (JIKA ADA) */}
+                      {billForm.hasPo && (
+                        <div className="p-5 rounded-xl bg-blue-50 border border-blue-100 space-y-4">
+                          <h4 className="font-bold text-blue-900 text-[13px] flex items-center gap-2 border-b border-blue-200/50 pb-2.5">
+                            <Database size={16}/> Pemotongan Kuota & Referensi PO
+                          </h4>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Cari Master PO</label>
+                              <POAutocomplete 
+                                value={billForm.poNumber} 
+                                options={pos.map(p => p.poNumber)} 
+                                onChange={(v) => setBillForm({
+                                  ...billForm, 
+                                  poNumber: v, 
+                                  locationId: '', 
+                                  selectedPeriod: ''
+                                })} 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Pilih Lokasi / Peruntukan</label>
+                              <ObjectAutocomplete 
+                                value={billForm.locationId} 
+                                options={activePoForBill ? activePoForBill.locations.map(l => ({ 
+                                  id: l.id, 
+                                  label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
+                                  disabled: l.usedQuota >= l.totalQuota 
+                                })) : []} 
+                                onChange={(v) => setBillForm({
+                                  ...billForm, 
+                                  locationId: v, 
+                                  selectedPeriod: ''
+                                })} 
+                                disabled={!billForm.poNumber} 
+                                placeholder="-- Pilih Lokasi --" 
+                              />
+                            </div>
                           </div>
-                          <div className="md:col-span-3">
-                            <label className="block text-xs font-bold text-slate-600 mb-1">Nilai PO (Rp)</label>
+                          
+                          {/* TOMBOL OPSI PERIODE BULAN */}
+                          {activeLocForBill?.generatedPeriods?.length > 0 && (
+                            <div className="pt-2 animate-in fade-in zoom-in duration-300">
+                              <label className="block text-[12px] font-bold text-slate-600 mb-2.5 flex justify-between">
+                                <span>Pilih Opsi Periode Tagihan</span>
+                                <span className="text-blue-600 font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
+                              </label>
+                              <div className="flex flex-wrap gap-2.5">
+                                {activeLocForBill.generatedPeriods.map((p, i) => {
+                                  const isUsed = i < activeLocForBill.usedQuota;
+                                  return (
+                                    <label 
+                                      key={i} 
+                                      className={`cursor-pointer px-4 py-2 rounded-lg border text-[13px] transition-all shadow-sm
+                                        ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
+                                        billForm.selectedPeriod === p ? 'bg-blue-600 text-white border-blue-600 font-bold scale-105' : 
+                                        'bg-white text-slate-700 border-slate-300 hover:border-blue-400 hover:bg-blue-50 font-semibold'}
+                                      `}
+                                    >
+                                      <input 
+                                        type="radio" 
+                                        name="periodSelect" 
+                                        className="hidden" 
+                                        value={p} 
+                                        disabled={isUsed}
+                                        checked={billForm.selectedPeriod === p} 
+                                        onChange={(e) => setBillForm({...billForm, selectedPeriod: e.target.value})} 
+                                      />
+                                      {p} {isUsed && ' ✓'}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeLocForBill && (() => {
+                            const stats = getLocationStats(activeLocForBill);
+                            if (stats.isShortageWarning) {
+                              return (
+                                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
+                                  <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
+                                  <div>
+                                    <h5 className="text-[12px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
+                                    <p className="text-[12px] text-rose-600 mt-1">
+                                      Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+
+                        </div>
+                      )}
+                      
+                      {/* BAGIAN DATA INVOICE UMUM */}
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-slate-800 text-[14px] border-b border-slate-200 pb-2">Data Dokumen / Invoice</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                          <div className="md:col-span-12">
+                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Judul / Uraian Tagihan</label>
                             <input 
                               type="text" 
-                              value={loc.value} 
-                              onChange={e => handleLocationChange(loc.id, 'value', formatInputNumber(e.target.value))} 
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm font-bold" 
+                              value={billForm.title} 
+                              onChange={e => setBillForm({...billForm, title: e.target.value})} 
+                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                              placeholder="Ketik uraian tagihan..." 
+                            />
+                          </div>
+                          <div className="md:col-span-8">
+                             <label className="block text-[12px] font-bold text-slate-600 mb-1.5">No. BAST (Opsional)</label>
+                             <input 
+                               type="text" 
+                               value={billForm.noBast} 
+                               onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
+                               className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                               placeholder="BAST-..." 
+                             />
+                          </div>
+                          <div className="md:col-span-4">
+                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nominal (Rp)</label>
+                            <input 
+                              type="text" 
+                              value={billForm.amount} 
+                              onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
+                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold text-slate-800" 
                               placeholder="0"
                             />
                           </div>
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-bold text-slate-600 mb-1">Kuota (Bulan)</label>
+                          <div className="md:col-span-6">
+                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Tanggal Invoice</label>
                             <input 
-                              type="number" 
-                              value={loc.totalQuota} 
-                              onChange={e => handleLocationChange(loc.id, 'totalQuota', e.target.value)} 
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
+                              type="date" 
+                              value={billForm.date} 
+                              onChange={e => setBillForm({...billForm, date: e.target.value})} 
+                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] text-slate-700" 
                             />
                           </div>
-                          <div className="md:col-span-2">
-                             <label className="block text-xs font-bold text-slate-600 mb-1">Start Month</label>
-                             <input 
-                               type="month" 
-                               value={loc.startMonth} 
-                               onChange={e => handleLocationChange(loc.id, 'startMonth', e.target.value)} 
-                               className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-sm" 
-                             />
-                          </div>
-                          <button 
-                            onClick={() => setManualForm(p => ({ 
-                              ...p, 
-                              locations: p.locations.filter(x => x.id !== loc.id)
-                            }))} 
-                            className="absolute -top-2 -right-2 bg-white text-rose-500 border border-rose-100 rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
-                          >
-                            <X size={14}/>
-                          </button>
                         </div>
-                      )})}
+                      </div>
                     </div>
                     
-                    <div className="p-6 border-t border-slate-100 flex justify-end bg-slate-50">
+                    <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end">
                       <button 
-                        onClick={handleSaveManualPO} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+                        type="submit" 
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-sm flex items-center gap-2 cursor-pointer transition-colors text-[13px]"
                       >
-                        <Save size={18}/> Simpan Data PO
+                        <Save size={16}/> Simpan ke Database
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* TAB: INPUT PO */}
+              {activeTab === 'tab-input-po' && (
+                <div className="animate-tab">
+                  <div className="flex justify-end mb-6">
+                    {/* TOGGLE INPUT MODE */}
+                    <div className="bg-slate-200 p-1.5 rounded-2xl flex gap-1 shadow-inner">
+                      <button 
+                        onClick={() => setInputMode('manual')} 
+                        className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all ${inputMode === 'manual' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:bg-slate-300'}`}
+                      >
+                        Input Manual
+                      </button>
+                      <button 
+                        onClick={() => setInputMode('excel')} 
+                        className={`px-5 py-2 rounded-xl text-[13px] font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:bg-slate-300'}`}
+                      >
+                        <FileSpreadsheet size={16}/> Import Excel
                       </button>
                     </div>
                   </div>
-                ) : (
-                  
-                  /* MODE EXCEL PO */
-                  <div className="space-y-6 mt-2">
-                    <div className="bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-12 text-center relative overflow-hidden bg-emerald-50/20">
-                      <UploadCloud size={48} className="mx-auto text-emerald-500 mb-4 opacity-40" />
-                      <h3 className="text-xl font-bold mb-2">Unggah Excel Master PO</h3>
-                      <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
-                      
-                      </p>
-                      <div className="inline-block relative">
+
+                  {/* MODE MANUAL PO */}
+                  {inputMode === 'manual' ? (
+                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-6 bg-blue-50/30 border-b border-slate-100">
+                        <label className="block text-[13px] font-bold text-blue-900 mb-2">Nomor Induk PO</label>
                         <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          accept=".xlsx, .xls" 
-                          onChange={handleFileUpload} 
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                          type="text" 
+                          value={manualForm.poNumber} 
+                          onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
+                          className="w-full max-w-md px-3.5 py-2.5 rounded-lg border border-blue-200 font-bold focus:ring-2 focus:ring-blue-500 outline-none text-[13px]" 
+                          placeholder="Contoh: 416xxxxxxx" 
                         />
-                        <div className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100">
-                          <FileSpreadsheet size={20}/> Pilih File Dokumen
+                      </div>
+                      
+                      <div className="p-6 space-y-6">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                          <h3 className="font-bold text-slate-700 text-[14px]">Daftar Lokasi di bawah PO ini</h3>
+                          <button 
+                            onClick={() => setManualForm(p => ({
+                              ...p, 
+                              locations: [
+                                ...p.locations,
+                                {
+                                  id: `L-${Date.now()}`,
+                                  name: '',
+                                  value: '',
+                                  totalQuota: '',
+                                  startMonth: '',
+                                  billingType: 'partial'
+                                }
+                              ]
+                            }))} 
+                            className="text-[12px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1"
+                          >
+                            <Plus size={14}/> Tambah Baris
+                          </button>
                         </div>
+                        
+                        {/* LOOPING INPUT LOKASI */}
+                        {manualForm.locations.map((loc) => {
+                             const previewMonths = (loc.startMonth && loc.totalQuota > 0 && loc.billingType === 'partial') 
+                                  ? generateMonthsArray(loc.startMonth, loc.totalQuota) : [];
+
+                             return (
+                          <div key={loc.id} className="p-5 rounded-2xl border bg-slate-50/50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group border-slate-200 shadow-sm">
+                            <div className="md:col-span-5">
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Lokasi</label>
+                              <LocationAutocomplete 
+                                value={loc.name} 
+                                options={availableLocationNames} 
+                                onChange={v => handleLocationChange(loc.id, 'name', v)} 
+                              />
+                            </div>
+                            <div className="md:col-span-3">
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nilai PO (Rp)</label>
+                              <input 
+                                type="text" 
+                                value={loc.value} 
+                                onChange={e => handleLocationChange(loc.id, 'value', formatInputNumber(e.target.value))} 
+                                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold" 
+                                placeholder="0"
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Kuota (Bulan)</label>
+                              <input 
+                                type="number" 
+                                value={loc.totalQuota} 
+                                onChange={e => handleLocationChange(loc.id, 'totalQuota', e.target.value)} 
+                                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                               <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Start Month</label>
+                               <input 
+                                 type="month" 
+                                 value={loc.startMonth} 
+                                 onChange={e => handleLocationChange(loc.id, 'startMonth', e.target.value)} 
+                                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                               />
+                            </div>
+                            <button 
+                              onClick={() => setManualForm(p => ({ 
+                                ...p, 
+                                locations: p.locations.filter(x => x.id !== loc.id)
+                              }))} 
+                              className="absolute -top-2 -right-2 bg-white text-rose-500 border border-rose-100 rounded-full p-1.5 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                            >
+                              <X size={14}/>
+                            </button>
+                          </div>
+                        )})}
+                      </div>
+                      
+                      <div className="p-6 border-t border-slate-100 flex justify-end bg-slate-50">
+                        <button 
+                          onClick={handleSaveManualPO} 
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center gap-2 cursor-pointer transition-colors shadow-sm text-[13px]"
+                        >
+                          <Save size={16}/> Simpan Data PO
+                        </button>
                       </div>
                     </div>
+                  ) : (
                     
-                    {excelPreview && (
-                      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-                        <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
-                          <h3 className="font-bold text-sm">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
-                          <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400">
-                            <X size={20}/>
-                          </button>
+                    /* MODE EXCEL PO */
+                    <div className="space-y-6 mt-2">
+                      <div className="bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-12 text-center relative overflow-hidden bg-emerald-50/20">
+                        <UploadCloud size={48} className="mx-auto text-emerald-500 mb-4 opacity-40" />
+                        <h3 className="text-xl font-bold mb-2">Unggah Excel Master PO</h3>
+                        <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
+                        
+                        </p>
+                        <div className="inline-block relative">
+                          <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            accept=".xlsx, .xls" 
+                            onChange={handleFileUpload} 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                          />
+                          <div className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 text-[13px]">
+                            <FileSpreadsheet size={18}/> Pilih File Dokumen
+                          </div>
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-100 text-slate-500 uppercase font-black tracking-widest">
-                              <tr>
-                                <th className="px-6 py-4">No PO</th>
-                                <th className="px-6 py-4">Daftar Lokasi & Nilai</th>
-                                <th className="px-6 py-4">Kuota</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y border-t border-slate-100">
-                              {excelPreview.map((p, i) => (
-                                <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                                  <td className="px-6 py-5 font-black text-blue-600 text-sm align-top">{p.poNumber}</td>
-                                  <td className="px-6 py-5 align-top">
-                                    {p.locations.map((l, li) => (
-                                      <div key={li} className="mb-2 last:mb-0">
-                                        <span className="font-bold text-slate-700">{l.name}</span> 
-                                        <span className="text-slate-400 text-[10px] ml-2">({formatRupiah(l.value)})</span>
-                                      </div>
-                                    ))}
-                                  </td>
-                                  <td className="px-6 py-5 align-top">
-                                    {p.locations.map((l, li) => (
-                                      <div key={li} className="mb-2 last:mb-0 font-bold text-slate-500">
-                                        {l.totalQuota} Bln
-                                      </div>
-                                    ))}
-                                  </td>
+                      </div>
+                      
+                      {excelPreview && (
+                        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+                          <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-[13px]">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
+                            <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400">
+                              <X size={18}/>
+                            </button>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider">
+                                <tr>
+                                  <th className="px-6 py-4">No PO</th>
+                                  <th className="px-6 py-4">Daftar Lokasi & Nilai</th>
+                                  <th className="px-6 py-4">Kuota</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody className="divide-y border-t border-slate-100">
+                                {excelPreview.map((p, i) => (
+                                  <tr key={i} className="hover:bg-blue-50/20 transition-colors">
+                                    <td className="px-6 py-5 font-bold text-blue-600 text-[13px] align-top">{p.poNumber}</td>
+                                    <td className="px-6 py-5 align-top">
+                                      {p.locations.map((l, li) => (
+                                        <div key={li} className="mb-2 last:mb-0">
+                                          <span className="font-semibold text-slate-700">{l.name}</span> 
+                                          <span className="text-slate-400 text-[11px] ml-2">({formatRupiah(l.value)})</span>
+                                        </div>
+                                      ))}
+                                    </td>
+                                    <td className="px-6 py-5 align-top">
+                                      {p.locations.map((l, li) => (
+                                        <div key={li} className="mb-2 last:mb-0 font-semibold text-slate-500">
+                                          {l.totalQuota} Bln
+                                        </div>
+                                      ))}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-6 bg-emerald-50 border-t flex justify-end">
+                            <button 
+                              onClick={handleSaveExcel} 
+                              className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 text-[13px]"
+                            >
+                              Ya, Simpan {excelPreview.length} PO ke Cloud
+                            </button>
+                          </div>
                         </div>
-                        <div className="p-6 bg-emerald-50 border-t flex justify-end">
-                          <button 
-                            onClick={handleSaveExcel} 
-                            className="bg-emerald-600 text-white font-black py-3 px-8 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700"
-                          >
-                            Ya, Simpan {excelPreview.length} PO ke Cloud
-                          </button>
-                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: MASTER PO VIEW */}
+              {activeTab === 'tab-master-po' && (
+                <div className="animate-tab">
+                  {/* Search Bar untuk Master PO */}
+                  <div className="mb-6 flex items-center gap-4 mt-2">
+                      <div className="relative flex-1">
+                        <Search size={16} className="absolute left-4 top-3.5 text-slate-400"/>
+                        <input 
+                          type="text" 
+                          value={searchPOQuery} 
+                          onChange={e => setSearchPOQuery(e.target.value)} 
+                          className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-[13px] focus:ring-4 focus:ring-blue-100 outline-none bg-white font-medium" 
+                          placeholder="Ketik Nomor PO untuk memunculkan data..." 
+                        />
+                      </div>
+                  </div>
+
+                  <div className="columns-1 md:columns-2 gap-6 space-y-6">
+                    {filteredPOs.length > 0 ? (
+                      filteredPOs.map(p => {
+                        const isExpanded = expandedPOs[p.idDB];
+                        return (
+                          <div key={p.idDB} className="break-inside-avoid bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col hover:shadow-md transition-shadow">
+                            <div 
+                              onClick={() => togglePO(p.idDB)}
+                              className="p-5 bg-slate-800 text-white flex justify-between items-center cursor-pointer select-none hover:bg-slate-700 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-[14px]">{p.poNumber}</span>
+                                <span className="bg-slate-700 text-slate-300 px-2.5 py-0.5 rounded-md text-[10px] font-semibold border border-slate-600">
+                                  {p.locations.length} Lokasi
+                                </span>
+                              </div>
+                              <div className="text-slate-400">
+                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                              </div>
+                            </div>
+                            
+                            {isExpanded && (
+                              <div className="divide-y divide-slate-100 flex-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                {p.locations.map(l => {
+                                  const s = getLocationStats(l);
+                                  const progress = l.value > 0 ? (s.totalBilled / l.value) * 100 : 0;
+                                  return (
+                                    <div key={l.id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors">
+                                      <div className="flex justify-between items-start mb-3">
+                                        <div className="flex-1 pr-4">
+                                          <h5 className="font-bold text-slate-800 text-[13px] mb-1">{l.name}</h5>
+                                          <div className="text-[12px] text-slate-500">
+                                            Sisa Saldo: <span className={`font-bold ${s.isShortageWarning ? 'text-rose-600' : 'text-slate-700'}`}>
+                                              {formatRupiah(s.remainingValue)} / {formatRupiah(l.value)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Penyerapan</div>
+                                          <div className="text-[12px] font-bold text-blue-600">{progress.toFixed(1)}%</div>
+                                        </div>
+                                      </div>
+                                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div 
+                                          className={`h-full transition-all duration-1000 ${progress >= 100 ? 'bg-emerald-500' : progress >= 80 ? 'bg-amber-500' : 'bg-blue-500'}`} 
+                                          style={{ width: `${Math.min(progress, 100)}%` }}
+                                        ></div>
+                                      </div>
+                                      <div className="flex justify-between mt-2.5">
+                                          <div className="text-[11px] font-medium text-slate-500">Kuota Dokumen: {l.usedQuota} / {l.totalQuota}</div>
+                                          {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="break-inside-avoid p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl w-full">
+                          {searchPOQuery.trim() === '' ? (
+                             <>
+                               <Search size={40} className="mx-auto mb-4 opacity-30" />
+                               <p className="font-medium text-[15px] text-slate-500">Cari Master PO di sini.</p>
+                             </>
+                          ) : (
+                             <>
+                               <AlertTriangle size={40} className="mx-auto mb-4 opacity-30 text-amber-500" />
+                               <p className="font-medium text-[15px] text-slate-500">PO tidak ditemukan.</p>
+                             </>
+                          )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* TAB: MASTER PO VIEW */}
-            {activeTab === 'tab-master-po' && (
-              <div className="animate-tab">
-                {/* Search Bar untuk Master PO */}
-                <div className="mb-6 flex items-center gap-4 mt-2">
+              {/* TAB: DATA TAGIHAN VIEW */}
+              {activeTab === 'tab-data-tagihan' && (
+                <div className="animate-tab flex flex-col h-full">
+                  {/* Header & Export Button */}
+                  <div className="flex flex-col sm:flex-row justify-end mb-6 gap-4 mt-2">
+                    <button 
+                      onClick={handleExportExcel} 
+                      className="bg-emerald-600 text-white font-bold py-2 px-5 rounded-xl flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-emerald-700 transition-colors"
+                    >
+                      <Download size={16}/> Export ke Excel
+                    </button>
+                  </div>
+                  
+                  {/* TOOLBAR */}
+                  <div className="mb-6 flex flex-col lg:flex-row gap-4">
                     <div className="relative flex-1">
-                      <Search size={16} className="absolute left-4 top-3.5 text-slate-400"/>
+                      <Search size={16} className="absolute left-4 top-3 text-slate-400"/>
                       <input 
                         type="text" 
-                        value={searchPOQuery} 
-                        onChange={e => setSearchPOQuery(e.target.value)} 
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-sm focus:ring-4 focus:ring-blue-100 outline-none bg-white font-medium" 
-                        placeholder="Ketik Nomor PO untuk memunculkan data..." 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-100 outline-none bg-white font-medium" 
+                        placeholder="Cari Tagihan..." 
                       />
                     </div>
-                </div>
-
-                <div className="columns-1 md:columns-2 gap-6 space-y-6">
-                  {filteredPOs.length > 0 ? (
-                    filteredPOs.map(p => {
-                      const isExpanded = expandedPOs[p.idDB];
-                      return (
-                        <div key={p.idDB} className="break-inside-avoid bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col hover:shadow-md transition-shadow">
-                          <div 
-                            onClick={() => togglePO(p.idDB)}
-                            className="p-5 bg-slate-800 text-white flex justify-between items-center cursor-pointer select-none hover:bg-slate-700 transition-colors"
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="relative">
+                        <input 
+                          type="date" 
+                          value={filterDate} 
+                          onChange={e => setFilterDate(e.target.value)} 
+                          className="w-full sm:w-auto pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-100 outline-none bg-white text-slate-600 font-medium"
+                        />
+                        {filterDate && (
+                          <button 
+                            onClick={() => setFilterDate('')} 
+                            className="absolute right-3 top-3 text-slate-400 hover:text-rose-500"
                           >
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-sm">{p.poNumber}</span>
-                              <span className="bg-slate-700 text-slate-300 px-2.5 py-0.5 rounded-md text-[10px] font-semibold border border-slate-600">
-                                {p.locations.length} Lokasi
-                              </span>
-                            </div>
-                            <div className="text-slate-400">
-                              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                            </div>
-                          </div>
-                          
-                          {isExpanded && (
-                            <div className="divide-y divide-slate-100 flex-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                              {p.locations.map(l => {
-                                const s = getLocationStats(l);
-                                const progress = (l.usedQuota / l.totalQuota) * 100;
-                                return (
-                                  <div key={l.id} className="p-5 hover:bg-slate-50 transition-colors">
-                                    <div className="flex justify-between items-end mb-3">
-                                      <div>
-                                        <h5 className="font-semibold text-slate-800 text-sm">{l.name}</h5>
-                                        <div className="text-xs text-slate-500 mt-1">
-                                          Sisa Saldo: <span className={`font-bold ${s.isShortageWarning ? 'text-rose-600' : 'text-slate-700'}`}>{formatRupiah(s.remainingValue)}</span>
-                                        </div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-[11px] font-bold text-slate-500 mb-1.5">
-                                          {l.usedQuota} dari {l.totalQuota} Tagihan
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                      <div 
-                                        className={`h-full transition-all duration-700 ${l.usedQuota === l.totalQuota ? 'bg-emerald-500' : 'bg-blue-500'}`} 
-                                        style={{ width: `${progress}%` }}
-                                      ></div>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <div className="break-inside-avoid p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl w-full">
-                        {searchPOQuery.trim() === '' ? (
-                           <>
-                             <Search size={48} className="mx-auto mb-4 opacity-30" />
-                             <p className="font-medium text-lg">Silakan ketik nomor PO di kolom pencarian.</p>
-                           </>
-                        ) : (
-                           <>
-                             <AlertTriangle size={48} className="mx-auto mb-4 opacity-30 text-amber-500" />
-                             <p className="font-medium text-lg">PO tidak ditemukan.</p>
-                           </>
+                            <X size={16} />
+                          </button>
                         )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* TAB: DATA TAGIHAN VIEW */}
-            {activeTab === 'tab-data-tagihan' && (
-              <div className="animate-tab flex flex-col h-full">
-                {/* Header & Export Button */}
-                <div className="flex flex-col sm:flex-row justify-end mb-6 gap-4 mt-2">
-                  <button 
-                    onClick={handleExportExcel} 
-                    className="bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-xl flex items-center gap-2 text-sm shadow-md hover:bg-emerald-700 transition-colors"
-                  >
-                    <Download size={16}/> Export ke Excel
-                  </button>
-                </div>
-                
-                {/* TOOLBAR */}
-                <div className="mb-6 flex flex-col lg:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search size={16} className="absolute left-4 top-3.5 text-slate-400"/>
-                    <input 
-                      type="text" 
-                      value={searchTerm} 
-                      onChange={e => setSearchTerm(e.target.value)} 
-                      className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-sm focus:ring-4 focus:ring-blue-100 outline-none bg-white font-medium" 
-                      placeholder="Cari Tagihan..." 
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="relative">
-                      <input 
-                        type="date" 
-                        value={filterDate} 
-                        onChange={e => setFilterDate(e.target.value)} 
-                        className="w-full sm:w-auto pl-4 pr-10 py-3 rounded-2xl border border-slate-200 text-sm focus:ring-4 focus:ring-blue-100 outline-none bg-white text-slate-600 font-medium"
-                      />
-                      {filterDate && (
-                        <button 
-                          onClick={() => setFilterDate('')} 
-                          className="absolute right-3 top-3.5 text-slate-400 hover:text-rose-500"
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
-                    {/* PILL TABS FILTER STATUS */}
-                    <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-auto overflow-x-auto scrollbar-hide flex-shrink-0">
-                      <button onClick={() => setFilterStatus('all')} className={`px-4 py-2 text-sm font-bold rounded-xl whitespace-nowrap transition-all ${filterStatus === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua Status</button>
-                      <button onClick={() => setFilterStatus('berjalan')} className={`px-4 py-2 text-sm font-bold rounded-xl whitespace-nowrap transition-all ${filterStatus === 'berjalan' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
-                      <button onClick={() => setFilterStatus('backdate')} className={`px-4 py-2 text-sm font-bold rounded-xl whitespace-nowrap transition-all ${filterStatus === 'backdate' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
-                      <button onClick={() => setFilterStatus('non-po')} className={`px-4 py-2 text-sm font-bold rounded-xl whitespace-nowrap transition-all ${filterStatus === 'non-po' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-PO</button>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* DAFTAR DATA BERGAYA KARTU */}
-                <div className="space-y-4 pb-8">
-                  {currentBills.map(b => {
-                    const isBackdate = b.year < currentYear;
-                    
-                    return (
-                      <div key={b.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col md:flex-row md:items-center gap-4 relative overflow-hidden group">
-                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${!b.hasPo ? 'bg-rose-500' : (isBackdate ? 'bg-amber-400' : 'bg-emerald-500')}`}></div>
-                        
-                        <div className="flex-1 pl-2">
-                          <div className="flex items-center gap-3 mb-1.5">
-                            <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                              <CalendarClock size={14}/> {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                            </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${isBackdate ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                              {isBackdate ? 'BACKDATE' : 'BERJALAN'}
-                            </span>
-                          </div>
-                          
-                          <h4 className="font-bold text-slate-800 text-lg mb-3 leading-tight pr-4">{b.title}</h4>
-
-                          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-                            {b.hasPo ? (
-                              <>
-                                <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100">
-                                  <Database size={14} /> {b.poNumber}
-                                </span>
-                                <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                  <MapPin size={14} className="text-slate-400" /> {b.locationName || 'Lokasi terhapus'}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg border border-rose-100">
-                                <AlertTriangle size={14} /> PENDING NON-PO
-                              </span>
-                            )}
-
-                            {b.period && (
-                              <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                <Clock size={14} className="text-slate-400"/> {b.period}
-                              </span>
-                            )}
-
-                            {b.noBast && b.noBast !== '-' && (
-                              <span className="flex items-center gap-1.5 font-mono bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                <FileText size={14} className="text-slate-400"/> BAST: {b.noBast}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0 pr-2">
-                          <div className="text-left md:text-right">
-                            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Nilai Tagihan</span>
-                            <span className="block text-xl font-black text-slate-800">{formatRupiah(b.amount)}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button 
-                              onClick={() => handleEditClick(b)} 
-                              className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold"
-                              title="Edit Tagihan"
-                            >
-                              <Edit size={14} /> Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteBill(b.id)} 
-                              className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold"
-                              title="Hapus Tagihan"
-                            >
-                              <Trash2 size={14} /> Hapus
-                            </button>
-                          </div>
-                        </div>
                       </div>
-                    );
-                  })}
+                      {/* PILL TABS FILTER STATUS */}
+                      <div className="flex bg-slate-100 p-1.5 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-hide flex-shrink-0">
+                        <button onClick={() => setFilterStatus('all')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua Status</button>
+                        <button onClick={() => setFilterStatus('berjalan')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'berjalan' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
+                        <button onClick={() => setFilterStatus('backdate')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'backdate' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
+                        <button onClick={() => setFilterStatus('non-po')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'non-po' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-PO</button>
+                      </div>
+                    </div>
+                  </div>
                   
-                  {filteredBills.length === 0 && (
-                    <div className="p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl">
-                      <Search size={40} className="mx-auto mb-4 opacity-30" />
-                      <p className="font-medium text-lg text-slate-500">Data tagihan tidak ditemukan.</p>
-                      <p className="text-sm mt-1 opacity-70">Coba sesuaikan kata kunci pencarian atau filter tahun.</p>
-                    </div>
-                  )}
-
-                  {/* PAGINATION CONTROLS */}
-                  {filteredBills.length > 0 && (
-                    <div className="pt-6 border-t border-slate-200 mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                      <div className="text-xs text-slate-500 font-medium">
-                        Menampilkan {indexOfFirstBill + 1} - {Math.min(indexOfLastBill, filteredBills.length)} dari {filteredBills.length} dokumen tagihan.
-                      </div>
+                  {/* DAFTAR DATA BERGAYA KARTU */}
+                  <div className="space-y-4 pb-8">
+                    {currentBills.map(b => {
+                      const isBackdate = b.year < currentYear;
                       
-                      {totalPages > 1 && (
-                        <div className="flex items-center gap-1">
-                          <button 
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronLeft size={18} />
-                          </button>
+                      return (
+                        <div key={b.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col md:flex-row md:items-center gap-4 relative overflow-hidden group">
+                          <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${!b.hasPo ? 'bg-rose-500' : (isBackdate ? 'bg-amber-400' : 'bg-emerald-500')}`}></div>
                           
-                          {getPageNumbers().map(number => (
-                            <button
-                              key={number}
-                              onClick={() => setCurrentPage(number)}
-                              className={`px-3 py-1 rounded-lg text-sm font-bold transition-all ${
-                                currentPage === number 
-                                  ? 'bg-blue-600 text-white shadow-md' 
-                                  : 'text-slate-600 hover:bg-blue-50 border border-transparent'
-                              }`}
-                            >
-                              {number}
-                            </button>
-                          ))}
+                          <div className="flex-1 pl-2">
+                            <div className="flex items-center gap-3 mb-1.5">
+                              <span className="text-[12px] font-bold text-slate-400 flex items-center gap-1.5">
+                                <CalendarClock size={14}/> {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isBackdate ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                {isBackdate ? 'BACKDATE' : 'BERJALAN'}
+                              </span>
+                            </div>
+                            
+                            <h4 className="font-bold text-slate-800 text-[16px] mb-3 leading-tight pr-4">{b.title}</h4>
 
-                          <button 
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronRight size={18} />
-                          </button>
+                            <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium text-slate-600">
+                              {b.hasPo ? (
+                                <>
+                                  <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100">
+                                    <Database size={14} /> {b.poNumber}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                    <MapPin size={14} className="text-slate-400" /> {b.locationName || 'Lokasi terhapus'}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg border border-rose-100">
+                                  <AlertTriangle size={14} /> PENDING NON-PO
+                                </span>
+                              )}
+
+                              {b.period && (
+                                <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                  <Clock size={14} className="text-slate-400"/> {b.period}
+                                </span>
+                              )}
+
+                              {b.noBast && b.noBast !== '-' && (
+                                <span className="flex items-center gap-1.5 font-mono bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                  <FileText size={14} className="text-slate-400"/> BAST: {b.noBast}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0 pr-2">
+                            <div className="text-left md:text-right">
+                              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Nilai Tagihan</span>
+                              <span className="block text-xl font-bold text-slate-800">{formatRupiah(b.amount)}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => handleEditClick(b)} 
+                                className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg transition-colors flex items-center gap-1.5 text-[12px] font-bold"
+                                title="Edit Tagihan"
+                              >
+                                <Edit size={14} /> Edit
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBill(b.id)} 
+                                className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors flex items-center gap-1.5 text-[12px] font-bold"
+                                title="Hapus Tagihan"
+                              >
+                                <Trash2 size={14} /> Hapus
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+                      );
+                    })}
+                    
+                    {filteredBills.length === 0 && (
+                      <div className="p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl">
+                        <Search size={40} className="mx-auto mb-4 opacity-30" />
+                        <p className="font-medium text-[15px] text-slate-500">Data tagihan tidak ditemukan.</p>
+                        <p className="text-[13px] mt-1 opacity-70">Coba sesuaikan kata kunci pencarian atau filter tahun.</p>
+                      </div>
+                    )}
 
+                    {/* PAGINATION CONTROLS */}
+                    {filteredBills.length > 0 && (
+                      <div className="pt-6 border-t border-slate-200 mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div className="text-[12px] text-slate-500 font-medium">
+                          Menampilkan {indexOfFirstBill + 1} - {Math.min(indexOfLastBill, filteredBills.length)} dari {filteredBills.length} dokumen tagihan.
+                        </div>
+                        
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                              disabled={currentPage === 1}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            
+                            {getPageNumbers().map(number => (
+                              <button
+                                key={number}
+                                onClick={() => setCurrentPage(number)}
+                                className={`px-3 py-1 rounded-lg text-[13px] font-bold transition-all ${
+                                  currentPage === number 
+                                    ? 'bg-blue-600 text-white shadow-md' 
+                                    : 'text-slate-600 hover:bg-blue-50 border border-transparent'
+                                }`}
+                              >
+                                {number}
+                              </button>
+                            ))}
+
+                            <button 
+                              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                              disabled={currentPage === totalPages}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
+
+      {/* FOOTER HIJAU */}
+      <footer className="bg-[#8cc63f] text-white text-center text-[11px] py-3 font-semibold z-30 shadow-inner tracking-wider">
+        ©{currentYear} PT. Elnusa Petrofin
+      </footer>
     </div>
   );
 }
@@ -1822,18 +1871,19 @@ export default function App() {
 // SUB-COMPONENTS
 // ==========================================
 
-function SidebarButton({ id, icon, label, activeTab, onClick }) {
+function SidebarSubButton({ id, label, activeTab, onClick }) {
   const active = activeTab === id;
   return (
     <button 
       onClick={() => onClick(id)} 
-      className={`flex items-center gap-3 px-4 py-3 rounded-2xl w-full transition-all duration-300 
+      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl w-full transition-all duration-200 
         ${active 
-          ? 'bg-blue-600 text-white font-bold shadow-xl shadow-blue-900/50 translate-x-1' 
-          : 'text-slate-400 hover:bg-slate-800 hover:text-white hover:translate-x-1'
+          ? 'bg-blue-50 text-blue-600 font-bold border border-blue-100' 
+          : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600 font-medium'
         }`}
     >
-      {icon} <span className="text-xs uppercase tracking-wider">{label}</span>
+      <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-blue-600' : 'bg-transparent'}`}></div>
+      <span className="text-[13px]">{label}</span>
     </button>
   );
 }
@@ -1855,13 +1905,13 @@ function LocationAutocomplete({ value, options, onChange }) {
   
   return (
     <div className="relative" ref={ref}>
-      <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+      <Search size={14} className="absolute left-3 top-3 text-slate-400" />
       <input 
         type="text" 
         value={value} 
         onChange={e => { onChange(e.target.value); setOpen(true); }} 
         onFocus={() => setOpen(true)} 
-        className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none" 
         placeholder="Cari lokasi..." 
       />
       {open && filtered.length > 0 && (
@@ -1870,7 +1920,7 @@ function LocationAutocomplete({ value, options, onChange }) {
             <li 
               key={i} 
               onClick={() => { onChange(x); setOpen(false); }} 
-              className="px-5 py-3 text-sm hover:bg-blue-50 cursor-pointer font-bold text-slate-700 border-b border-slate-50 last:border-0"
+              className="px-5 py-3 text-[13px] hover:bg-blue-50 cursor-pointer font-bold text-slate-700 border-b border-slate-50 last:border-0"
             >
               {x}
             </li>
@@ -1918,7 +1968,7 @@ function POAutocomplete({ value, options, onChange }) {
             }
           }} 
           onFocus={() => setOpen(true)} 
-          className="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white" 
+          className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none bg-white" 
           placeholder="Cari PO..." 
         />
         {input && (
@@ -1938,13 +1988,13 @@ function POAutocomplete({ value, options, onChange }) {
               <li 
                 key={i} 
                 onClick={() => { onChange(x); setOpen(false); }} 
-                className="px-5 py-3 text-sm font-black text-blue-600 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
+                className="px-5 py-3 text-[13px] font-bold text-blue-600 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
               >
                 {x}
               </li>
             ))
           ) : (
-            <li className="px-5 py-3 text-xs italic text-slate-400">PO tidak ditemukan</li>
+            <li className="px-5 py-3 text-[12px] italic text-slate-400">PO tidak ditemukan</li>
           )}
         </ul>
       )}
@@ -1992,7 +2042,7 @@ function ObjectAutocomplete({ value, options, onChange, placeholder, disabled })
           }} 
           onFocus={() => { if(!disabled) setOpen(true) }} 
           disabled={disabled} 
-          className="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-300" 
+          className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-300" 
           placeholder={placeholder} 
         />
         {input && !disabled && (
@@ -2017,7 +2067,7 @@ function ObjectAutocomplete({ value, options, onChange, placeholder, disabled })
                     setOpen(false); 
                   } 
                 }} 
-                className={`px-5 py-3 text-xs font-bold border-b border-slate-50 last:border-0 
+                className={`px-5 py-3 text-[13px] font-bold border-b border-slate-50 last:border-0 
                   ${x.disabled 
                     ? 'text-slate-300 bg-slate-50 cursor-not-allowed' 
                     : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer'
@@ -2027,7 +2077,7 @@ function ObjectAutocomplete({ value, options, onChange, placeholder, disabled })
               </li>
             ))
           ) : (
-            <li className="px-5 py-3 text-xs italic text-slate-400">Tidak ditemukan</li>
+            <li className="px-5 py-3 text-[12px] italic text-slate-400">Tidak ditemukan</li>
           )}
         </ul>
       )}
