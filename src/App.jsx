@@ -1482,7 +1482,7 @@ export default function App() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <div className="text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
-                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
+                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Potensi PO Additional!</div>}
                                                 </div>
                                               </div>
                                             )
