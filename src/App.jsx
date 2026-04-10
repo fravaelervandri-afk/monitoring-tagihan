@@ -25,6 +25,11 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
 
+  // State untuk Notifikasi Lonceng & Status Read
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [readNotifs, setReadNotifs] = useState([]);
+  const notifRef = useRef(null);
+
   // State untuk Accordion Menu di Sidebar
   const [sidebarMenu, setSidebarMenu] = useState({ po: true, tagihan: true });
 
@@ -49,6 +54,17 @@ export default function App() {
     }));
   };
 
+  // Handle klik di luar notifikasi untuk menutup dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Ambil daftar nama lokasi unik yang pernah diinput untuk saran (Autocomplete)
   const availableLocationNames = useMemo(() => {
     const names = new Set();
@@ -64,7 +80,7 @@ export default function App() {
 
   // Filter khusus Master PO (Hanya memunculkan data saat di-search)
   const filteredPOs = useMemo(() => {
-    if (!searchPOQuery.trim()) return [];
+    if (!searchPOQuery.trim()) return pos; // Tampilkan semua PO jika tidak ada pencarian
     return pos.filter(p => p.poNumber.toLowerCase().includes(searchPOQuery.toLowerCase()));
   }, [pos, searchPOQuery]);
 
@@ -466,6 +482,7 @@ export default function App() {
   // ==========================================
   const [billForm, setBillForm] = useState({
     hasPo: true,
+    region: '',
     poNumber: '',
     locationId: '',
     selectedPeriod: '', 
@@ -478,8 +495,11 @@ export default function App() {
   const activePoForBill = pos.find(p => String(p.poNumber) === String(billForm.poNumber));
   const activeLocForBill = activePoForBill?.locations.find(l => String(l.id) === String(billForm.locationId));
 
-  const getLocationStats = (loc) => {
-    const locationBills = bills.filter(b => String(b.locationId) === String(loc.id));
+  const getLocationStats = (loc, poNum) => {
+    const locationBills = bills.filter(b => {
+       // Extract ID comparison safely since locationName is now mutated
+       return b.hasPo && b.poNumber === poNum && b.locationName.includes(loc.name);
+    });
     const totalBilled = locationBills.reduce((sum, b) => sum + b.amount, 0);
     const remainingValue = loc.value - totalBilled;
     const estimatedMonthly = loc.totalQuota > 0 ? loc.value / loc.totalQuota : 0;
@@ -498,8 +518,12 @@ export default function App() {
   const handleSaveBill = async (e) => {
     e.preventDefault();
     
-    if (!billForm.title || !billForm.amount || !billForm.date) {
-      return showNotif('Lengkapi data tagihan (Judul, Nilai, Tanggal)!', 'error');
+    if (!billForm.region) {
+      return showNotif('Silakan pilih Region!', 'error');
+    }
+    
+    if (!billForm.title || !billForm.noBast || !billForm.amount || !billForm.date) {
+      return showNotif('Lengkapi data tagihan (Judul, No. BAST, Nilai, Tanggal)!', 'error');
     }
     
     const cleanAmount = parseFloat(String(billForm.amount).replace(/[^0-9]/g, '')) || 0;
@@ -543,6 +567,11 @@ export default function App() {
       iteration = activeLocForBill.usedQuota + 1; 
     }
 
+    // TRICK DATABASE: Menyisipkan Region ke dalam string location_name
+    const finalLocationName = billForm.hasPo && activeLocForBill 
+        ? `${billForm.region} | ${activeLocForBill.name}` 
+        : billForm.region;
+
     const dbBillPayload = {
       title: billForm.title,
       no_bast: billForm.noBast || '-',
@@ -554,7 +583,7 @@ export default function App() {
       location_id: billForm.hasPo ? billForm.locationId : null,
       period: billForm.hasPo ? billForm.selectedPeriod : null,
       iteration: iteration,
-      location_name: activeLocForBill ? activeLocForBill.name : null
+      location_name: finalLocationName
     };
 
     const { data: insertedBill, error: insertErr } = await supabase.from('bills').insert([dbBillPayload]).select();
@@ -586,7 +615,8 @@ export default function App() {
     showNotif('Tagihan Disimpan & Kuota Dipotong!', 'success');
     
     setBillForm({
-      hasPo: true, 
+      hasPo: true,
+      region: '',
       poNumber: '', 
       locationId: '', 
       selectedPeriod: '', 
@@ -641,8 +671,18 @@ export default function App() {
   const [editingBill, setEditingBill] = useState(null);
 
   const handleEditClick = (bill) => {
+    let extractedRegion = '';
+    let rawLoc = bill.locationName || '';
+    if(rawLoc.includes(' | ')) {
+        extractedRegion = rawLoc.split(' | ')[0];
+    } else {
+        const regions = ['Sumbagut', 'Sumbagsel', 'Jabalinus', 'Kalimantan', 'Sulawesi', 'Malupa'];
+        if(regions.includes(rawLoc)) extractedRegion = rawLoc;
+    }
+
     setEditingBill({ 
         ...bill,
+        region: extractedRegion,
         amount: formatInputNumber(bill.amount)
     });
   };
@@ -650,7 +690,7 @@ export default function App() {
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     
-    if (!editingBill.title || !editingBill.amount || !editingBill.date) {
+    if (!editingBill.title || !editingBill.noBast || !editingBill.amount || !editingBill.date || !editingBill.region) {
       return showNotif('Lengkapi data wajib!', 'error');
     }
     
@@ -659,11 +699,21 @@ export default function App() {
         return showNotif('Nominal tagihan tidak valid!', 'error');
     }
 
+    let newLocationName = editingBill.locationName || '';
+    if(editingBill.hasPo) {
+        const parts = newLocationName.split(' | ');
+        const locPart = parts.length > 1 ? parts[1] : newLocationName;
+        newLocationName = `${editingBill.region} | ${locPart}`;
+    } else {
+        newLocationName = editingBill.region;
+    }
+
     const updatePayload = {
       title: editingBill.title,
       no_bast: editingBill.noBast || '-',
       amount: cleanAmount,
       date: editingBill.date,
+      location_name: newLocationName,
       year: parseInt(editingBill.date.substring(0, 4))
     };
 
@@ -673,7 +723,7 @@ export default function App() {
         return showNotif('Gagal menyimpan perubahan: ' + error.message, 'error');
     }
 
-    setBills(bills.map(b => b.id === editingBill.id ? { ...b, ...updatePayload, noBast: updatePayload.no_bast } : b).sort((a, b) => new Date(b.date) - new Date(a.date)));
+    setBills(bills.map(b => b.id === editingBill.id ? { ...b, ...updatePayload, noBast: updatePayload.no_bast, locationName: updatePayload.location_name } : b).sort((a, b) => new Date(b.date) - new Date(a.date)));
     setEditingBill(null);
     showNotif('Perubahan Berhasil Disimpan ke Supabase!', 'success');
   };
@@ -685,12 +735,20 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState('all'); // all, berjalan, backdate, non-po
   const [filterDate, setFilterDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // State untuk Pagination Master PO
+  const [currentPagePO, setCurrentPagePO] = useState(1);
+  const [itemsPerPagePO, setItemsPerPagePO] = useState(10);
 
   // Reset ke halaman 1 setiap kali ada pencarian atau filter yang diubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterDate]);
+  }, [searchTerm, filterStatus, filterDate, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPagePO(1);
+  }, [searchPOQuery, itemsPerPagePO]);
 
   const filteredBills = useMemo(() => {
     return bills.filter(b => {
@@ -742,6 +800,32 @@ export default function App() {
     return pageNumbers;
   };
 
+  // Pagination Master PO
+  const indexOfLastPO = currentPagePO * itemsPerPagePO;
+  const indexOfFirstPO = indexOfLastPO - itemsPerPagePO;
+  const currentPOs = filteredPOs.slice(indexOfFirstPO, indexOfLastPO);
+  const totalPagesPO = Math.ceil(filteredPOs.length / itemsPerPagePO);
+
+  const getPageNumbersPO = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPagesPO <= maxVisiblePages) {
+        for (let i = 1; i <= totalPagesPO; i++) pageNumbers.push(i);
+    } else {
+        let startPage = Math.max(currentPagePO - 2, 1);
+        let endPage = startPage + maxVisiblePages - 1;
+        
+        if (endPage > totalPagesPO) {
+            endPage = totalPagesPO;
+            startPage = endPage - maxVisiblePages + 1;
+        }
+        
+        for (let i = startPage; i <= endPage; i++) pageNumbers.push(i);
+    }
+    return pageNumbers;
+  };
+
   // EXPORT TO EXCEL
   const handleExportExcel = async () => {
     if (!window.XLSX) {
@@ -771,7 +855,7 @@ export default function App() {
   };
 
   // ==========================================
-  // DATA PREPARATION FOR DASHBOARD
+  // DATA PREPARATION FOR DASHBOARD & NOTIFIKASI
   // ==========================================
   const berjalanBills = bills.filter(b => b.year >= currentYear);
   const backdateBills = bills.filter(b => b.year < currentYear);
@@ -790,9 +874,18 @@ export default function App() {
   const poKritis = [];
   pos.forEach(p => {
     p.locations.forEach(loc => {
-      const stats = getLocationStats(loc);
-      if (stats.isShortageWarning || (loc.totalQuota > 0 && (loc.totalQuota - loc.usedQuota) <= 1 && loc.usedQuota < loc.totalQuota)) {
-        poKritis.push({ poNumber: p.poNumber, location: loc, stats });
+      // Perhitungan khusus untuk mengakomodasi region trik
+      const locationBills = bills.filter(b => b.hasPo && b.poNumber === p.poNumber && (b.locationName || '').includes(loc.name));
+      const totalBilled = locationBills.reduce((sum, b) => sum + b.amount, 0);
+      const remainingValue = loc.value - totalBilled;
+      const estimatedMonthly = loc.totalQuota > 0 ? loc.value / loc.totalQuota : 0;
+      const remainingQuota = loc.totalQuota - loc.usedQuota;
+      
+      const isShortageWarning = remainingQuota === 1 && remainingValue < estimatedMonthly;
+      
+      // HANYA masukkan jika isShortageWarning bernilai true (Nilai PO Kurang)
+      if (isShortageWarning) {
+        poKritis.push({ poIdDB: p.idDB, poNumber: p.poNumber, location: loc, stats: { remainingValue, totalBilled, isShortageWarning } });
       }
     });
   });
@@ -800,49 +893,62 @@ export default function App() {
   // Mengurutkan agar peringatan "Potensi PO Additional!" selalu berada di paling atas
   poKritis.sort((a, b) => (b.stats.isShortageWarning ? 1 : 0) - (a.stats.isShortageWarning ? 1 : 0));
 
+  // Notifikasi yang belum dibaca
+  const unreadPoKritis = poKritis.filter(pk => !readNotifs.includes(`${pk.poNumber}-${pk.location.id}`));
+
   const tagihanTerakhir = [...bills].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
-  const chartData = useMemo(() => {
-    let openCount = 0;
-    let completeCount = 0;
-    pos.forEach(po => {
-      po.locations.forEach(loc => {
-        if (loc.usedQuota >= loc.totalQuota) completeCount++;
-        else openCount++;
-      });
-    });
-    return {
-      labels: ['Lokasi Open (Bisa Ditagih)', 'Lokasi Complete (Kuota Habis)'],
-      datasets: [{ 
-          data: [openCount, completeCount], 
-          backgroundColor: ['#3b82f6', '#10b981'], 
-          borderWidth: 0, 
-          hoverOffset: 8 
-      }]
-    };
-  }, [pos]);
+  // Aksi ketika notifikasi di-klik (menandai read & direct)
+  const handleNotifClick = (pk) => {
+    const notifId = `${pk.poNumber}-${pk.location.id}`;
+    if (!readNotifs.includes(notifId)) {
+      setReadNotifs([...readNotifs, notifId]);
+    }
+    
+    setSearchPOQuery(pk.poNumber);
+    setExpandedPOs(prev => ({ ...prev, [pk.poIdDB]: true }));
+    setActiveTab('tab-master-po');
+    setSidebarMenu(prev => ({ ...prev, po: true }));
+    setIsNotifOpen(false);
+  };
 
   // ==========================================
   // GET PAGE TITLE UNTUK HEADER KONTEKSTUAL
   // ==========================================
   const getBreadcrumbs = () => {
+    const renderHome = () => (
+      <span 
+        onClick={() => setActiveTab('tab-home')} 
+        className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors flex items-center"
+      >
+        <Home size={14} className="inline mr-1.5 -mt-0.5" /> Beranda
+      </span>
+    );
+    const separator = <span className="mx-2 text-slate-300">{'>'}</span>;
+
     switch(activeTab) {
-      case 'tab-home': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Dashboard</span></>;
-      case 'tab-master-po': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> PO <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Data PO</span></>;
-      case 'tab-data-tagihan': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> Tagihan <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Data Tagihan</span></>;
-      case 'tab-input-tagihan': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> Tagihan <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">Tagihan Baru</span></>;
-      case 'tab-input-po': return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda <span className="mx-2 text-slate-300">{'>'}</span> PO <span className="mx-2 text-slate-300">{'>'}</span> <span className="text-slate-700 font-semibold">PO Baru</span></>;
-      default: return <><Home size={14} className="inline mr-1 -mt-0.5 text-slate-400"/> Beranda</>;
+      case 'tab-home': 
+        return <div className="flex items-center">{renderHome()} {separator} <span className="text-[#12649b] font-semibold">Dashboard</span></div>;
+      case 'tab-master-po': 
+        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">Data PO</span></div>;
+      case 'tab-data-tagihan': 
+        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Data Tagihan</span></div>;
+      case 'tab-input-tagihan': 
+        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Tagihan Baru</span></div>;
+      case 'tab-input-po': 
+        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">PO Baru</span></div>;
+      default: 
+        return <div className="flex items-center">{renderHome()}</div>;
     }
   };
 
   const getPageTitleString = () => {
     switch(activeTab) {
       case 'tab-home': return 'Dashboard Monitoring';
-      case 'tab-master-po': return 'Rekap Data PO';
-      case 'tab-data-tagihan': return 'Rekap Data Tagihan';
-      case 'tab-input-tagihan': return 'Input Tagihan Baru';
-      case 'tab-input-po': return 'Input PO Baru';
+      case 'tab-master-po': return ''; // Disembunyikan karena judul ada di dalam border box
+      case 'tab-data-tagihan': return ''; // Disembunyikan karena judul ada di dalam border box
+      case 'tab-input-tagihan': return ''; // Disembunyikan karena judul ada di dalam border box
+      case 'tab-input-po': return ''; // Disembunyikan karena judul dipindah ke form border box
       default: return 'Aplikasi Monitoring';
     }
   };
@@ -851,10 +957,10 @@ export default function App() {
   if (isLoadingDB) {
     return (
       <div className="h-screen w-full bg-slate-50 flex flex-col items-center justify-center text-slate-800" style={{ fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-        <Monitor size={48} className="text-blue-500 animate-pulse mb-6" />
+        <Monitor size={48} className="text-[#12649b] animate-pulse mb-6" />
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-4 h-4 border-2 border-[#12649b] border-t-transparent rounded-full animate-spin"></div>
             <p className="font-semibold text-slate-600 tracking-wide uppercase text-[13px]">Memuat Sistem Monitoring...</p>
           </div>
           <p className="text-xs text-slate-400">Menyiapkan dashboard dan basis data Anda</p>
@@ -893,7 +999,7 @@ export default function App() {
                  </div>
                  {editingBill.hasPo && (
                    <div className="flex-1">
-                     <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Lokasi / Periode (Terkunci)</span>
+                     <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Lokasi Asal (Terkunci)</span>
                      <span className="font-semibold text-slate-700">{editingBill.locationName} {editingBill.period && `(${editingBill.period})`}</span>
                    </div>
                  )}
@@ -901,48 +1007,67 @@ export default function App() {
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Judul Tagihan</label>
+                    <label className="block text-[13px] font-bold text-slate-800 mb-1.5">Region <span className="text-red-500">*</span></label>
+                    <select 
+                      required
+                      value={editingBill.region}
+                      onChange={e => setEditingBill({...editingBill, region: e.target.value})}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] text-[13px] bg-white"
+                    >
+                      <option value="" disabled>Pilih Region</option>
+                      <option value="Sumbagut">Sumbagut</option>
+                      <option value="Sumbagsel">Sumbagsel</option>
+                      <option value="Jabalinus">Jabalinus</option>
+                      <option value="Kalimantan">Kalimantan</option>
+                      <option value="Sulawesi">Sulawesi</option>
+                      <option value="Malupa">Malupa</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[13px] font-bold text-slate-800 mb-1.5">Judul Tagihan</label>
                     <input 
                         type="text" 
                         required 
                         value={editingBill.title} 
                         onChange={e => setEditingBill({...editingBill, title: e.target.value})} 
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] text-[13px]" 
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">No. BAST (Opsional)</label>
+                    <label className="block text-[13px] font-bold text-slate-800 mb-1.5">No. BAST <span className="text-red-500">*</span></label>
                     <input 
                         type="text" 
+                        required
+                        placeholder="BAST-..."
                         value={editingBill.noBast === '-' ? '' : editingBill.noBast} 
                         onChange={e => setEditingBill({...editingBill, noBast: e.target.value})} 
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] text-[13px]" 
                     />
                   </div>
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nominal Tagihan (Rp)</label>
+                    <label className="block text-[13px] font-bold text-slate-800 mb-1.5">Nominal Tagihan (Rp)</label>
                     <input 
                         type="text" 
                         required 
                         value={editingBill.amount} 
                         onChange={e => setEditingBill({...editingBill, amount: formatInputNumber(e.target.value)})} 
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] text-[14px] font-bold" 
                     />
                   </div>
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Tanggal Approval</label>
+                    <label className="block text-[13px] font-bold text-slate-800 mb-1.5">Tanggal Approval</label>
                     <input 
                         type="date" 
                         required 
                         value={editingBill.date} 
                         onChange={e => setEditingBill({...editingBill, date: e.target.value})} 
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] text-[13px]" 
                     />
                   </div>
                </div>
                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                  <button type="button" onClick={() => setEditingBill(null)} className="px-5 py-2 text-[13px] text-slate-500 font-semibold hover:bg-slate-100 rounded-lg transition-colors">Batal</button>
-                 <button type="submit" className="px-6 py-2 text-[13px] bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-colors flex items-center gap-2"><Save size={16}/> Simpan Perubahan</button>
+                 <button type="submit" className="px-6 py-2 text-[13px] bg-[#12649b] hover:bg-blue-800 text-white font-bold rounded-lg shadow-md transition-colors flex items-center gap-2"><Save size={16}/> Simpan Perubahan</button>
                </div>
             </form>
           </div>
@@ -952,7 +1077,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         {/* SIDEBAR KIRI (LIGHT THEME) */}
         <aside className="w-64 bg-white border-r border-slate-200 flex flex-col z-20">
-          <div className="flex flex-col px-6 py-4 mb-4">
+          <div className="flex flex-col px-6 py-4 mb-4 mt-2">
             <img 
               src="/logo-elnusa.png" 
               alt="Logo ELnusa" 
@@ -972,8 +1097,8 @@ export default function App() {
                 onClick={() => setActiveTab('tab-home')} 
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl w-full transition-all duration-200 
                   ${activeTab === 'tab-home' 
-                    ? 'bg-blue-50 text-blue-600 font-bold' 
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-blue-600 font-medium'}`}
+                    ? 'bg-blue-50 text-[#12649b] font-bold' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-[#12649b] font-medium'}`}
               >
                 <Home size={18} /> <span className="text-[13px] font-semibold">Dashboard</span>
               </button>
@@ -1025,25 +1150,71 @@ export default function App() {
         {/* KONTEN UTAMA KANAN */}
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
           
-          {/* HEADER TOPBAR KONTEKSTUAL (LIGHT, BREADCRUMBS) */}
+          {/* HEADER TOPBAR KONTEKSTUAL */}
           <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-10">
             <div className="text-[13px] text-slate-500 font-medium flex items-center">
               {getBreadcrumbs()}
             </div>
             
-            <div className="flex items-center gap-5">
-              <button className="text-slate-400 hover:text-blue-600 transition-colors relative cursor-pointer">
-                 <Bell size={18} />
-                 <span className="absolute 1px right-0.5 w-2 h-2 bg-rose-500 rounded-full"></span>
-              </button>
+            <div className="flex items-center gap-5 relative">
+              {/* Notifikasi Lonceng */}
+              <div className="relative" ref={notifRef}>
+                <button 
+                  onClick={() => setIsNotifOpen(!isNotifOpen)}
+                  className="text-slate-400 hover:text-[#12649b] transition-colors relative cursor-pointer p-2 rounded-full hover:bg-slate-50"
+                >
+                   <Bell size={20} />
+                   {unreadPoKritis.length > 0 && (
+                     <span className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 bg-[#f43f5e] rounded-full border-2 border-white"></span>
+                   )}
+                </button>
+                
+                {/* Dropdown Notifikasi */}
+                {isNotifOpen && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                      <h4 className="font-bold text-[13px] text-slate-700">Notifikasi ({unreadPoKritis.length})</h4>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto main-scroll">
+                      {unreadPoKritis.length > 0 ? (
+                        <div className="divide-y divide-slate-100">
+                          {unreadPoKritis.map((pk, idx) => (
+                            <div 
+                              key={idx} 
+                              onClick={() => handleNotifClick(pk)}
+                              className="p-4 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-start gap-3"
+                            >
+                              <div className="mt-0.5 bg-rose-100 p-1.5 rounded-full text-rose-500">
+                                <AlertTriangle size={14} />
+                              </div>
+                              <div>
+                                <p className="text-[13px] font-bold text-slate-800">{pk.poNumber}</p>
+                                <p className="text-[12px] text-slate-500 mt-0.5 leading-snug">
+                                  Lokasi <span className="font-semibold text-slate-700">{pk.location.name}</span> butuh atensi. Potensi nilai PO kurang!
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center text-slate-400">
+                          <CheckCircle size={24} className="mx-auto mb-2 opacity-50 text-emerald-500" />
+                          <p className="text-[12px] font-medium">Tidak ada notifikasi baru.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Ikon Profil */}
               <div className="flex items-center gap-3 cursor-pointer group">
                 <div className="text-right hidden md:block">
-                  <p className="text-[13px] font-bold text-slate-700 group-hover:text-blue-600 transition-colors">RTC Support</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Elnusa Petrofin</p>
+                  <p className="text-[14px] font-bold text-[#12649b] group-hover:text-blue-700 transition-colors tracking-tight">RTC Support</p>
+                  <p className="text-[11px] text-slate-500 uppercase tracking-widest font-semibold mt-0.5">Elnusa Petrofin</p>
                 </div>
-                {/* Ikon Profil Minimalis */}
-                <div className="h-9 w-9 bg-slate-50 border border-slate-200 text-slate-400 rounded-full flex items-center justify-center shadow-sm group-hover:shadow transition-all group-hover:text-blue-500 group-hover:border-blue-200">
-                  <User size={18} />
+                <div className="h-10 w-10 bg-white border-2 border-slate-100 text-slate-400 rounded-full flex items-center justify-center shadow-sm group-hover:shadow transition-all group-hover:text-[#12649b] group-hover:border-blue-100">
+                  <User size={20} />
                 </div>
               </div>
             </div>
@@ -1054,7 +1225,9 @@ export default function App() {
             <div className="max-w-6xl mx-auto">
               
               {/* Main Content Title */}
-              <h2 className="text-[22px] font-bold text-slate-800 mb-6">{getPageTitleString()}</h2>
+              {getPageTitleString() && (
+                 <h2 className="text-[22px] font-bold text-slate-800 mb-6">{getPageTitleString()}</h2>
+              )}
 
               {/* TAB: DASHBOARD HOME */}
               {activeTab === 'tab-home' && (
@@ -1132,7 +1305,7 @@ export default function App() {
                         </h3>
                         <div className="space-y-3 flex-1">
                            {poKritis.length > 0 ? poKritis.slice(0, 4).map((pk, idx) => (
-                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer hover:border-amber-200 hover:shadow-sm transition-all" onClick={() => {setSearchPOQuery(pk.poNumber); setActiveTab('tab-master-po');}}>
+                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer hover:border-amber-200 hover:shadow-sm transition-all" onClick={() => handleNotifClick(pk)}>
                                  <div className="overflow-hidden pr-2">
                                     <div className="font-bold text-slate-800 text-[13px] mb-1 truncate">{pk.poNumber}</div>
                                     <div className="text-[12px] text-slate-500 truncate">{pk.location.name}</div>
@@ -1160,14 +1333,14 @@ export default function App() {
                      {/* Kolom Kanan: Tagihan Terbaru */}
                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
                         <h3 className="font-bold text-slate-800 text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
-                           <History size={18} className="text-blue-500" /> Histori Tagihan Masuk
+                           <History size={18} className="text-[#12649b]" /> Histori Tagihan Masuk
                         </h3>
                         <div className="space-y-3 flex-1 overflow-y-auto pr-2 main-scroll max-h-[300px]">
                            {tagihanTerakhir.length > 0 ? tagihanTerakhir.map(b => (
                               <div key={b.id} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group" 
                                    onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('all'); setSearchTerm(b.title); setCurrentPage(1); }}>
                                  <div className="flex justify-between items-start mb-2">
-                                    <div className="font-bold text-[13px] text-slate-800 truncate pr-4 group-hover:text-blue-600 transition-colors" title={b.title}>{b.title}</div>
+                                    <div className="font-bold text-[13px] text-[#12649b] truncate pr-4 group-hover:text-blue-800 transition-colors" title={b.title}>{b.title}</div>
                                     <div className="font-bold text-[13px] text-slate-800 whitespace-nowrap">{formatRupiah(b.amount)}</div>
                                  </div>
                                  <div className="flex items-center justify-between">
@@ -1188,78 +1361,439 @@ export default function App() {
                 </div>
               )}
 
+              {/* TAB: MASTER PO VIEW */}
+              {activeTab === 'tab-master-po' && (
+                <div className="animate-tab flex flex-col h-full">
+                  <div className="flex flex-col sm:flex-row justify-between mb-4 gap-4 items-center mt-2">
+                    <h3 className="font-bold text-[18px] text-slate-800">Daftar Kontrak PO</h3>
+                  </div>
+
+                  {/* TOOLBAR (Entries, Search) */}
+                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
+                    <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
+                      <select 
+                        value={itemsPerPagePO} 
+                        onChange={e => setItemsPerPagePO(Number(e.target.value))}
+                        className="border border-slate-300 rounded px-2 py-1.5 outline-none focus:border-[#12649b] bg-white cursor-pointer"
+                      >
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <span>entries per page</span>
+                    </div>
+
+                    <div className="relative w-full sm:w-auto">
+                      <input 
+                        type="text" 
+                        value={searchPOQuery} 
+                        onChange={e => setSearchPOQuery(e.target.value)} 
+                        className="w-full sm:w-64 pl-3 pr-8 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
+                        placeholder="Cari No. PO..." 
+                      />
+                      {searchPOQuery ? (
+                        <button onClick={() => setSearchPOQuery('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-500">
+                           <X size={14} />
+                        </button>
+                      ) : (
+                        <Search size={14} className="absolute right-2.5 top-2 text-slate-400"/>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TABEL PO */}
+                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-lg shadow-sm overflow-hidden mb-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-max">
+                        <thead className="bg-[#12649b] text-white">
+                          <tr>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">No PO</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Total Lokasi</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Total Nilai PO</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Serapan Rupiah</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Status Serapan</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {currentPOs.length > 0 ? currentPOs.map((p, index) => {
+                            const isExpanded = expandedPOs[p.idDB];
+                            
+                            // Kalkulasi total PO ini
+                            const totalValue = p.locations.reduce((sum, l) => sum + (l.value || 0), 0);
+                            const totalBilled = p.locations.reduce((sum, l) => sum + getLocationStats(l, p.poNumber).totalBilled, 0);
+                            const progress = totalValue > 0 ? (totalBilled / totalValue) * 100 : 0;
+
+                            return (
+                              <React.Fragment key={p.idDB}>
+                                <tr 
+                                  className={`transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50/50' : (index % 2 === 0 ? 'bg-white' : 'bg-[#f4f6f9] hover:bg-slate-100')}`} 
+                                  onClick={() => togglePO(p.idDB)}
+                                >
+                                  <td className="px-4 py-4 text-[14px] font-bold text-[#12649b]">{p.poNumber}</td>
+                                  <td className="px-4 py-4 text-[13px] text-slate-600 font-semibold text-center">{p.locations.length} Lokasi</td>
+                                  <td className="px-4 py-4 text-[13px] font-bold text-slate-700">{formatRupiah(totalValue)}</td>
+                                  <td className="px-4 py-4 text-[13px] font-bold text-slate-700">{formatRupiah(totalBilled)}</td>
+                                  <td className="px-4 py-4 text-[13px] text-center">
+                                     <div className="flex items-center justify-center gap-2">
+                                        <div className="w-24 bg-slate-200 h-2 rounded-full overflow-hidden">
+                                           <div className={`h-full ${progress >= 100 ? 'bg-emerald-500' : progress >= 80 ? 'bg-amber-500' : 'bg-[#12649b]'}`} style={{ width: `${Math.min(progress, 100)}%` }}></div>
+                                        </div>
+                                        <span className="text-[11px] font-bold text-slate-600 w-8 text-right">{progress.toFixed(0)}%</span>
+                                     </div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center text-slate-400">
+                                    {isExpanded ? <ChevronUp size={18} className="mx-auto text-[#12649b]" /> : <ChevronDown size={18} className="mx-auto" />}
+                                  </td>
+                                </tr>
+                                
+                                {/* EXPANDED CARDS CONTENT */}
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan="6" className="p-0 bg-slate-50 border-b-2 border-blue-200 shadow-inner">
+                                      <div className="p-6">
+                                        <h4 className="text-[14px] font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Rincian Peruntukan Lokasi: <span className="text-[#12649b]">{p.poNumber}</span></h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                          {p.locations.map(l => {
+                                            const s = getLocationStats(l, p.poNumber);
+                                            const locProgress = l.value > 0 ? (s.totalBilled / l.value) * 100 : 0;
+                                            return (
+                                              <div key={l.id} className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow transition-shadow">
+                                                <div className="flex justify-between items-start mb-3">
+                                                  <div className="flex-1 pr-4">
+                                                    <h5 className="font-bold text-slate-800 text-[13px] mb-1">{l.name}</h5>
+                                                    <div className="text-[11px] text-slate-500">
+                                                      Sisa Saldo: <span className={`font-bold ${s.isShortageWarning ? 'text-rose-600' : 'text-slate-700'}`}>
+                                                        {formatRupiah(s.remainingValue)} / {formatRupiah(l.value)}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div className="text-right">
+                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Penyerapan</div>
+                                                    <div className="text-[12px] font-bold text-[#12649b]">{locProgress.toFixed(1)}%</div>
+                                                  </div>
+                                                </div>
+                                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2.5">
+                                                  <div 
+                                                    className={`h-full transition-all duration-1000 ${locProgress >= 100 ? 'bg-emerald-500' : locProgress >= 80 ? 'bg-amber-500' : 'bg-[#12649b]'}`} 
+                                                    style={{ width: `${Math.min(locProgress, 100)}%` }}
+                                                  ></div>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <div className="text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
+                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            )
+                          }) : (
+                            <tr>
+                              <td colSpan="6" className="p-8 text-center text-slate-500">
+                                <AlertTriangle size={32} className="mx-auto mb-2 opacity-30 text-amber-500" />
+                                <p className="text-[14px]">Data PO tidak ditemukan.</p>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pagination Controls PO */}
+                  {filteredPOs.length > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
+                      <div>
+                        Showing <span className="font-bold">{indexOfFirstPO + 1}</span> to <span className="font-bold">{Math.min(indexOfLastPO, filteredPOs.length)}</span> from <span className="font-bold">{filteredPOs.length}</span> entries
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mt-3 sm:mt-0">
+                        <button 
+                          onClick={() => setCurrentPagePO(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPagePO === 1}
+                          className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
+                        >
+                          <ChevronLeft size={14} /> Previous
+                        </button>
+                        <button 
+                          onClick={() => setCurrentPagePO(prev => Math.min(prev + 1, totalPagesPO))}
+                          disabled={currentPagePO === totalPagesPO}
+                          className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
+                        >
+                          Next <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: DATA TAGIHAN VIEW */}
+              {activeTab === 'tab-data-tagihan' && (
+                <div className="animate-tab flex flex-col h-full">
+                  {/* Header & Export Button */}
+                  <div className="flex flex-col sm:flex-row justify-between mb-4 gap-4 items-center mt-2">
+                    <h3 className="font-bold text-[18px] text-slate-800">Daftar Tagihan</h3>
+                    <button 
+                      onClick={handleExportExcel} 
+                      className="bg-[#12649b] text-white font-bold py-2 px-5 rounded flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-blue-800 transition-colors"
+                    >
+                      <Download size={16}/> Export ke Excel
+                    </button>
+                  </div>
+                  
+                  {/* TOOLBAR (Entries, Filter, Search) */}
+                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
+                    <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
+                      <select 
+                        value={itemsPerPage} 
+                        onChange={e => setItemsPerPage(Number(e.target.value))}
+                        className="border border-slate-300 rounded px-2 py-1.5 outline-none focus:border-[#12649b] bg-white cursor-pointer"
+                      >
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <span>entries per page</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
+                      <div className="flex bg-slate-100 p-1 rounded-md overflow-x-auto scrollbar-hide">
+                        <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'all' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+                        <button onClick={() => setFilterStatus('berjalan')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'berjalan' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
+                        <button onClick={() => setFilterStatus('backdate')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'backdate' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
+                        <button onClick={() => setFilterStatus('non-po')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'non-po' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-PO</button>
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="date" 
+                          value={filterDate} 
+                          onChange={e => setFilterDate(e.target.value)} 
+                          className="w-full sm:w-auto px-3 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white text-slate-600"
+                        />
+                        {filterDate && (
+                          <button onClick={() => setFilterDate('')} className="absolute right-8 top-2 text-slate-400 hover:text-rose-500">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative w-full sm:w-auto">
+                        <input 
+                          type="text" 
+                          value={searchTerm} 
+                          onChange={e => setSearchTerm(e.target.value)} 
+                          className="w-full sm:w-64 pl-3 pr-8 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
+                          placeholder="Search..." 
+                        />
+                        {searchTerm ? (
+                          <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-500">
+                             <X size={14} />
+                          </button>
+                        ) : (
+                          <Search size={14} className="absolute right-2.5 top-2 text-slate-400"/>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* DAFTAR DATA BERGAYA TABEL */}
+                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-lg shadow-sm overflow-hidden mb-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-max">
+                        <thead className="bg-[#12649b] text-white">
+                          <tr>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Uraian Tagihan</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Tanggal</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Referensi PO</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Wilayah & Lokasi</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Nominal</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Status</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {currentBills.length > 0 ? currentBills.map((b, index) => {
+                            const isBackdate = b.year < currentYear;
+                            return (
+                              <tr key={b.id} className={index % 2 === 0 ? 'bg-white' : 'bg-[#f4f6f9] hover:bg-slate-100 transition-colors'}>
+                                <td className="px-4 py-4 text-[13px]">
+                                  <span className="font-bold text-[#12649b] hover:underline cursor-pointer" onClick={() => handleEditClick(b)}>{b.title}</span>
+                                  {b.noBast && b.noBast !== '-' && <div className="text-[11px] text-slate-500 mt-1 font-mono">BAST: {b.noBast}</div>}
+                                </td>
+                                <td className="px-4 py-4 text-[13px] text-slate-600 whitespace-nowrap">
+                                  {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                </td>
+                                <td className="px-4 py-4 text-[13px] text-slate-700 font-semibold">
+                                  {b.hasPo ? b.poNumber : <span className="italic text-slate-400">Non-PO</span>}
+                                </td>
+                                <td className="px-4 py-4 text-[13px] text-slate-600">
+                                  <div className="font-medium">{b.locationName || '-'}</div>
+                                  {b.period && <div className="text-[11px] text-slate-400 mt-0.5">{b.period}</div>}
+                                </td>
+                                <td className="px-4 py-4 text-[13px] font-bold text-slate-700 whitespace-nowrap">
+                                  {formatRupiah(b.amount)}
+                                </td>
+                                <td className="px-4 py-4 text-[12px] font-bold text-center">
+                                  {!b.hasPo ? (
+                                     <span className="text-rose-600">Pengecualian</span>
+                                  ) : (
+                                     <span className={isBackdate ? 'text-amber-600' : 'text-[#2bb673]'}>{isBackdate ? 'Backdate' : 'Closed'}</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-[13px] text-center">
+                                  <div className="flex items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
+                                    <button onClick={() => handleEditClick(b)} className="text-[#12649b] hover:text-blue-800" title="Edit"><Edit size={16}/></button>
+                                    <button onClick={() => handleDeleteBill(b.id)} className="text-rose-500 hover:text-rose-700" title="Hapus"><Trash2 size={16}/></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }) : (
+                            <tr>
+                              <td colSpan="7" className="p-8 text-center text-slate-500">
+                                <AlertTriangle size={32} className="mx-auto mb-2 opacity-30 text-amber-500" />
+                                <p className="text-[14px]">Data tagihan tidak ditemukan.</p>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {filteredBills.length > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
+                      <div>
+                        Showing <span className="font-bold">{indexOfFirstBill + 1}</span> to <span className="font-bold">{Math.min(indexOfLastBill, filteredBills.length)}</span> from <span className="font-bold">{filteredBills.length}</span> entries
+                      </div>
+                      
+                      <div className="flex items-center gap-1 mt-3 sm:mt-0">
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
+                        >
+                          <ChevronLeft size={14} /> Previous
+                        </button>
+                        <button 
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
+                        >
+                          Next <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* TAB: INPUT TAGIHAN */}
               {activeTab === 'tab-input-tagihan' && (
                 <div className="animate-tab">
-                  <form onSubmit={handleSaveBill} className="bg-white rounded-3xl border shadow-sm overflow-hidden mt-2">
-                    <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-                      <input 
-                        type="checkbox" 
-                        checked={!billForm.hasPo} 
-                        onChange={(e) => setBillForm({
-                          ...billForm, 
-                          hasPo: !e.target.checked, 
-                          poNumber: '', 
-                          locationId: '', 
-                          selectedPeriod: ''
-                        })} 
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" 
-                        id="non-po" 
-                      />
-                      <label htmlFor="non-po" className="font-bold text-[13px] text-slate-700 cursor-pointer">
-                        Tagihan Non-PO (Pengecualian)
-                      </label>
-                      {!billForm.hasPo && <AlertTriangle className="text-rose-500 animate-pulse hidden sm:block ml-2" size={18} />}
-                    </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
                     
-                    <div className="p-6 space-y-6">
+                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                      <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                        Input Tagihan Baru
+                      </h3>
+                      <label className="flex items-center gap-2 cursor-pointer text-[13px] font-bold text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={!billForm.hasPo} 
+                          onChange={(e) => setBillForm({
+                            ...billForm, 
+                            hasPo: !e.target.checked, 
+                            poNumber: '', 
+                            locationId: '', 
+                            selectedPeriod: ''
+                          })} 
+                          className="w-4 h-4 text-[#12649b] rounded border-slate-300 focus:ring-[#12649b]" 
+                        />
+                        Tagihan Non-PO (Pengecualian)
+                        {!billForm.hasPo && <AlertTriangle className="text-rose-500 ml-1" size={16} />}
+                      </label>
+                    </div>
+
+                    <form onSubmit={handleSaveBill} className="space-y-6">
+                      
+                      {/* Region Input (Selalu Ada) */}
+                      <div>
+                        <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          Region <span className="text-red-500">*</span>
+                        </label>
+                        <select 
+                          required
+                          value={billForm.region}
+                          onChange={e => setBillForm({...billForm, region: e.target.value})}
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] bg-white appearance-none cursor-pointer"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 9l4-4 4 4m0 6l-4 4-4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em` }}
+                        >
+                          <option value="" disabled>Pilih Region</option>
+                          <option value="Sumbagut">Sumbagut</option>
+                          <option value="Sumbagsel">Sumbagsel</option>
+                          <option value="Jabalinus">Jabalinus</option>
+                          <option value="Kalimantan">Kalimantan</option>
+                          <option value="Sulawesi">Sulawesi</option>
+                          <option value="Malupa">Malupa</option>
+                        </select>
+                      </div>
+
                       {/* BAGIAN REFERENSI PO (JIKA ADA) */}
                       {billForm.hasPo && (
-                        <div className="p-5 rounded-xl bg-blue-50 border border-blue-100 space-y-4">
-                          <h4 className="font-bold text-blue-900 text-[13px] flex items-center gap-2 border-b border-blue-200/50 pb-2.5">
-                            <Database size={16}/> Pemotongan Kuota & Referensi PO
-                          </h4>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Cari Master PO</label>
-                              <POAutocomplete 
-                                value={billForm.poNumber} 
-                                options={pos.map(p => p.poNumber)} 
-                                onChange={(v) => setBillForm({
-                                  ...billForm, 
-                                  poNumber: v, 
-                                  locationId: '', 
-                                  selectedPeriod: ''
-                                })} 
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Pilih Lokasi / Peruntukan</label>
-                              <ObjectAutocomplete 
-                                value={billForm.locationId} 
-                                options={activePoForBill ? activePoForBill.locations.map(l => ({ 
-                                  id: l.id, 
-                                  label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
-                                  disabled: l.usedQuota >= l.totalQuota 
-                                })) : []} 
-                                onChange={(v) => setBillForm({
-                                  ...billForm, 
-                                  locationId: v, 
-                                  selectedPeriod: ''
-                                })} 
-                                disabled={!billForm.poNumber} 
-                                placeholder="-- Pilih Lokasi --" 
-                              />
-                            </div>
+                        <>
+                          <div>
+                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                              Master PO <span className="text-red-500">*</span>
+                            </label>
+                            <POAutocomplete 
+                              value={billForm.poNumber} 
+                              options={pos.map(p => p.poNumber)} 
+                              onChange={(v) => setBillForm({
+                                ...billForm, 
+                                poNumber: v, 
+                                locationId: '', 
+                                selectedPeriod: ''
+                              })} 
+                            />
                           </div>
-                          
+
+                          <div>
+                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                              Lokasi / Peruntukan <span className="text-red-500">*</span>
+                            </label>
+                            <ObjectAutocomplete 
+                              value={billForm.locationId} 
+                              options={activePoForBill ? activePoForBill.locations.map(l => ({ 
+                                id: l.id, 
+                                label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
+                                disabled: l.usedQuota >= l.totalQuota 
+                              })) : []} 
+                              onChange={(v) => setBillForm({
+                                ...billForm, 
+                                locationId: v, 
+                                selectedPeriod: ''
+                              })} 
+                              disabled={!billForm.poNumber} 
+                              placeholder="-- Pilih Lokasi --" 
+                            />
+                          </div>
+
                           {/* TOMBOL OPSI PERIODE BULAN */}
                           {activeLocForBill?.generatedPeriods?.length > 0 && (
-                            <div className="pt-2 animate-in fade-in zoom-in duration-300">
-                              <label className="block text-[12px] font-bold text-slate-600 mb-2.5 flex justify-between">
-                                <span>Pilih Opsi Periode Tagihan</span>
-                                <span className="text-blue-600 font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
+                            <div className="pt-2 animate-in fade-in duration-300">
+                              <label className="block text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
+                                <span>Pilih Opsi Periode Tagihan <span className="text-red-500">*</span></span>
+                                <span className="text-[#12649b] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
                               </label>
                               <div className="flex flex-wrap gap-2.5">
                                 {activeLocForBill.generatedPeriods.map((p, i) => {
@@ -1267,10 +1801,10 @@ export default function App() {
                                   return (
                                     <label 
                                       key={i} 
-                                      className={`cursor-pointer px-4 py-2 rounded-lg border text-[13px] transition-all shadow-sm
+                                      className={`cursor-pointer px-5 py-2.5 rounded-lg border text-[13px] transition-all
                                         ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
-                                        billForm.selectedPeriod === p ? 'bg-blue-600 text-white border-blue-600 font-bold scale-105' : 
-                                        'bg-white text-slate-700 border-slate-300 hover:border-blue-400 hover:bg-blue-50 font-semibold'}
+                                        billForm.selectedPeriod === p ? 'bg-[#12649b] text-white border-[#12649b] font-bold shadow-md transform scale-105' : 
+                                        'bg-white text-slate-700 border-slate-300 hover:border-[#12649b] hover:bg-blue-50 font-semibold'}
                                       `}
                                     >
                                       <input 
@@ -1291,14 +1825,14 @@ export default function App() {
                           )}
 
                           {activeLocForBill && (() => {
-                            const stats = getLocationStats(activeLocForBill);
+                            const stats = getLocationStats(activeLocForBill, billForm.poNumber);
                             if (stats.isShortageWarning) {
                               return (
-                                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
+                                <div className="mt-2 p-4 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
                                   <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
                                   <div>
-                                    <h5 className="text-[12px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
-                                    <p className="text-[12px] text-rose-600 mt-1">
+                                    <h5 className="text-[13px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
+                                    <p className="text-[13px] text-rose-600 mt-1 leading-relaxed">
                                       Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
                                     </p>
                                   </div>
@@ -1307,66 +1841,75 @@ export default function App() {
                             }
                             return null;
                           })()}
-
-                        </div>
+                        </>
                       )}
                       
                       {/* BAGIAN DATA INVOICE UMUM */}
-                      <div className="space-y-4">
-                        <h4 className="font-bold text-slate-800 text-[14px] border-b border-slate-200 pb-2">Data Dokumen / Invoice</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                          <div className="md:col-span-12">
-                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Judul / Uraian Tagihan</label>
-                            <input 
-                              type="text" 
-                              value={billForm.title} 
-                              onChange={e => setBillForm({...billForm, title: e.target.value})} 
-                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
-                              placeholder="Ketik uraian tagihan..." 
-                            />
-                          </div>
-                          <div className="md:col-span-8">
-                             <label className="block text-[12px] font-bold text-slate-600 mb-1.5">No. BAST (Opsional)</label>
-                             <input 
-                               type="text" 
-                               value={billForm.noBast} 
-                               onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
-                               className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
-                               placeholder="BAST-..." 
-                             />
-                          </div>
-                          <div className="md:col-span-4">
-                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nominal (Rp)</label>
-                            <input 
-                              type="text" 
-                              value={billForm.amount} 
-                              onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
-                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold text-slate-800" 
-                              placeholder="0"
-                            />
-                          </div>
-                          <div className="md:col-span-6">
-                            <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Tanggal Invoice</label>
-                            <input 
-                              type="date" 
-                              value={billForm.date} 
-                              onChange={e => setBillForm({...billForm, date: e.target.value})} 
-                              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] text-slate-700" 
-                            />
-                          </div>
+                      <div>
+                        <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          Judul / Uraian Tagihan <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          required
+                          value={billForm.title} 
+                          onChange={e => setBillForm({...billForm, title: e.target.value})} 
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                          placeholder="Deskripsikan Uraian Tagihan..." 
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                           <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                             No. BAST <span className="text-red-500">*</span>
+                           </label>
+                           <input 
+                             type="text" 
+                             required
+                             value={billForm.noBast} 
+                             onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
+                             className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                             placeholder="BAST-..." 
+                           />
+                        </div>
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Tanggal Invoice <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="date" 
+                            required
+                            value={billForm.date} 
+                            onChange={e => setBillForm({...billForm, date: e.target.value})} 
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] text-slate-700" 
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Nominal (Rp) <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            required
+                            value={billForm.amount} 
+                            onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[15px] font-bold text-slate-800" 
+                            placeholder="0"
+                          />
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end">
-                      <button 
-                        type="submit" 
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-sm flex items-center gap-2 cursor-pointer transition-colors text-[13px]"
-                      >
-                        <Save size={16}/> Simpan ke Database
-                      </button>
-                    </div>
-                  </form>
+                      
+                      <div className="pt-6 flex justify-end">
+                        <button 
+                          type="submit" 
+                          className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
 
@@ -1378,7 +1921,7 @@ export default function App() {
                     <div className="bg-slate-200 p-1.5 rounded-2xl flex gap-1 shadow-inner">
                       <button 
                         onClick={() => setInputMode('manual')} 
-                        className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all ${inputMode === 'manual' ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:bg-slate-300'}`}
+                        className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all ${inputMode === 'manual' ? 'bg-white shadow text-[#12649b]' : 'text-slate-500 hover:bg-slate-300'}`}
                       >
                         Input Manual
                       </button>
@@ -1393,116 +1936,131 @@ export default function App() {
 
                   {/* MODE MANUAL PO */}
                   {inputMode === 'manual' ? (
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                      <div className="p-6 bg-blue-50/30 border-b border-slate-100">
-                        <label className="block text-[13px] font-bold text-blue-900 mb-2">Nomor Induk PO</label>
-                        <input 
-                          type="text" 
-                          value={manualForm.poNumber} 
-                          onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
-                          className="w-full max-w-md px-3.5 py-2.5 rounded-lg border border-blue-200 font-bold focus:ring-2 focus:ring-blue-500 outline-none text-[13px]" 
-                          placeholder="Contoh: 416xxxxxxx" 
-                        />
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
+                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                        <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                          Input PO Baru
+                        </h3>
                       </div>
                       
-                      <div className="p-6 space-y-6">
-                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                          <h3 className="font-bold text-slate-700 text-[14px]">Daftar Lokasi di bawah PO ini</h3>
-                          <button 
-                            onClick={() => setManualForm(p => ({
-                              ...p, 
-                              locations: [
-                                ...p.locations,
-                                {
-                                  id: `L-${Date.now()}`,
-                                  name: '',
-                                  value: '',
-                                  totalQuota: '',
-                                  startMonth: '',
-                                  billingType: 'partial'
-                                }
-                              ]
-                            }))} 
-                            className="text-[12px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1"
-                          >
-                            <Plus size={14}/> Tambah Baris
-                          </button>
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">Nomor Induk PO <span className="text-red-500">*</span></label>
+                          <input 
+                            type="text" 
+                            value={manualForm.poNumber} 
+                            onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                            placeholder="Contoh: 416xxxxxxx" 
+                          />
                         </div>
                         
-                        {/* LOOPING INPUT LOKASI */}
-                        {manualForm.locations.map((loc) => {
-                             const previewMonths = (loc.startMonth && loc.totalQuota > 0 && loc.billingType === 'partial') 
-                                  ? generateMonthsArray(loc.startMonth, loc.totalQuota) : [];
-
-                             return (
-                          <div key={loc.id} className="p-5 rounded-2xl border bg-slate-50/50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group border-slate-200 shadow-sm">
-                            <div className="md:col-span-5">
-                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Lokasi</label>
-                              <LocationAutocomplete 
-                                value={loc.name} 
-                                options={availableLocationNames} 
-                                onChange={v => handleLocationChange(loc.id, 'name', v)} 
-                              />
-                            </div>
-                            <div className="md:col-span-3">
-                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Nilai PO (Rp)</label>
-                              <input 
-                                type="text" 
-                                value={loc.value} 
-                                onChange={e => handleLocationChange(loc.id, 'value', formatInputNumber(e.target.value))} 
-                                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px] font-bold" 
-                                placeholder="0"
-                              />
-                            </div>
-                            <div className="md:col-span-2">
-                              <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Kuota (Bulan)</label>
-                              <input 
-                                type="number" 
-                                value={loc.totalQuota} 
-                                onChange={e => handleLocationChange(loc.id, 'totalQuota', e.target.value)} 
-                                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
-                              />
-                            </div>
-                            <div className="md:col-span-2">
-                               <label className="block text-[12px] font-bold text-slate-600 mb-1.5">Start Month</label>
-                               <input 
-                                 type="month" 
-                                 value={loc.startMonth} 
-                                 onChange={e => handleLocationChange(loc.id, 'startMonth', e.target.value)} 
-                                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 outline-none focus:border-blue-500 text-[13px]" 
-                               />
-                            </div>
+                        <div className="pt-4 border-t border-slate-100">
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="font-bold text-slate-800 text-[14px]">Daftar Lokasi di bawah PO ini</h4>
                             <button 
-                              onClick={() => setManualForm(p => ({ 
+                              onClick={() => setManualForm(p => ({
                                 ...p, 
-                                locations: p.locations.filter(x => x.id !== loc.id)
+                                locations: [
+                                  ...p.locations,
+                                  {
+                                    id: `L-${Date.now()}`,
+                                    name: '',
+                                    value: '',
+                                    totalQuota: '',
+                                    startMonth: '',
+                                    billingType: 'partial'
+                                  }
+                                ]
                               }))} 
-                              className="absolute -top-2 -right-2 bg-white text-rose-500 border border-rose-100 rounded-full p-1.5 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                              className="text-[13px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
                             >
-                              <X size={14}/>
+                              <Plus size={16}/> Tambah Baris
                             </button>
                           </div>
-                        )})}
-                      </div>
-                      
-                      <div className="p-6 border-t border-slate-100 flex justify-end bg-slate-50">
-                        <button 
-                          onClick={handleSaveManualPO} 
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center gap-2 cursor-pointer transition-colors shadow-sm text-[13px]"
-                        >
-                          <Save size={16}/> Simpan Data PO
-                        </button>
+                          
+                          {/* LOOPING INPUT LOKASI */}
+                          <div className="space-y-4">
+                            {manualForm.locations.map((loc) => {
+                                 const previewMonths = (loc.startMonth && loc.totalQuota > 0 && loc.billingType === 'partial') 
+                                      ? generateMonthsArray(loc.startMonth, loc.totalQuota) : [];
+
+                                 return (
+                              <div key={loc.id} className="p-5 rounded-xl border border-slate-200 bg-slate-50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group shadow-sm">
+                                <div className="md:col-span-4">
+                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
+                                  <LocationAutocomplete 
+                                    value={loc.name} 
+                                    options={availableLocationNames} 
+                                    onChange={v => handleLocationChange(loc.id, 'name', v)} 
+                                  />
+                                </div>
+                                <div className="md:col-span-3">
+                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Nilai PO (Rp) <span className="text-red-500">*</span></label>
+                                  <input 
+                                    type="text" 
+                                    value={loc.value} 
+                                    onChange={e => handleLocationChange(loc.id, 'value', formatInputNumber(e.target.value))} 
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px] font-bold" 
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Kuota (Bulan) <span className="text-red-500">*</span></label>
+                                  <input 
+                                    type="number" 
+                                    value={loc.totalQuota} 
+                                    onChange={e => handleLocationChange(loc.id, 'totalQuota', e.target.value)} 
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px]" 
+                                  />
+                                </div>
+                                <div className="md:col-span-3">
+                                   <label className="block text-[13px] font-bold text-slate-800 mb-2">Start Month</label>
+                                   <input 
+                                     type="month" 
+                                     value={loc.startMonth} 
+                                     onChange={e => handleLocationChange(loc.id, 'startMonth', e.target.value)} 
+                                     className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px]" 
+                                   />
+                                </div>
+                                <button 
+                                  onClick={() => setManualForm(p => ({ 
+                                    ...p, 
+                                    locations: p.locations.filter(x => x.id !== loc.id)
+                                  }))} 
+                                  className="absolute -top-3 -right-3 bg-white text-rose-500 border border-rose-200 rounded-full p-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                                >
+                                  <X size={14}/>
+                                </button>
+                              </div>
+                            )})}
+                          </div>
+                        </div>
+                        
+                        <div className="pt-6 flex justify-end">
+                          <button 
+                            onClick={handleSaveManualPO} 
+                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
+                          >
+                            Simpan Data PO
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
                     
                     /* MODE EXCEL PO */
-                    <div className="space-y-6 mt-2">
-                      <div className="bg-white rounded-3xl border-2 border-dashed border-emerald-200 p-12 text-center relative overflow-hidden bg-emerald-50/20">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2 space-y-6">
+                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                         <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                           Unggah Excel Master PO
+                         </h3>
+                      </div>
+
+                      <div className="border-2 border-dashed border-emerald-200 p-12 text-center relative rounded-xl bg-emerald-50/20">
                         <UploadCloud size={48} className="mx-auto text-emerald-500 mb-4 opacity-40" />
-                        <h3 className="text-xl font-bold mb-2">Unggah Excel Master PO</h3>
                         <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
-                        
+                           Tarik dan lepas file Excel Anda di sini, atau klik tombol di bawah untuk mencari file.
                         </p>
                         <div className="inline-block relative">
                           <input 
@@ -1512,14 +2070,14 @@ export default function App() {
                             onChange={handleFileUpload} 
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                           />
-                          <div className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 text-[13px]">
+                          <div className="bg-emerald-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm text-[13px]">
                             <FileSpreadsheet size={18}/> Pilih File Dokumen
                           </div>
                         </div>
                       </div>
                       
                       {excelPreview && (
-                        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                           <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-[13px]">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
                             <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400">
@@ -1530,15 +2088,15 @@ export default function App() {
                             <table className="w-full text-left text-xs">
                               <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider">
                                 <tr>
-                                  <th className="px-6 py-4">No PO</th>
-                                  <th className="px-6 py-4">Daftar Lokasi & Nilai</th>
+                                  <th className="px-6 py-4 border-r border-slate-200 last:border-0">No PO</th>
+                                  <th className="px-6 py-4 border-r border-slate-200 last:border-0">Daftar Lokasi & Nilai</th>
                                   <th className="px-6 py-4">Kuota</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y border-t border-slate-100">
                                 {excelPreview.map((p, i) => (
                                   <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                                    <td className="px-6 py-5 font-bold text-blue-600 text-[13px] align-top">{p.poNumber}</td>
+                                    <td className="px-6 py-5 font-bold text-[#12649b] text-[13px] align-top">{p.poNumber}</td>
                                     <td className="px-6 py-5 align-top">
                                       {p.locations.map((l, li) => (
                                         <div key={li} className="mb-2 last:mb-0">
@@ -1562,7 +2120,7 @@ export default function App() {
                           <div className="p-6 bg-emerald-50 border-t flex justify-end">
                             <button 
                               onClick={handleSaveExcel} 
-                              className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 text-[13px]"
+                              className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-sm hover:bg-emerald-700 text-[13px]"
                             >
                               Ya, Simpan {excelPreview.length} PO ke Cloud
                             </button>
@@ -1571,286 +2129,6 @@ export default function App() {
                       )}
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* TAB: MASTER PO VIEW */}
-              {activeTab === 'tab-master-po' && (
-                <div className="animate-tab">
-                  {/* Search Bar untuk Master PO */}
-                  <div className="mb-6 flex items-center gap-4 mt-2">
-                      <div className="relative flex-1">
-                        <Search size={16} className="absolute left-4 top-3.5 text-slate-400"/>
-                        <input 
-                          type="text" 
-                          value={searchPOQuery} 
-                          onChange={e => setSearchPOQuery(e.target.value)} 
-                          className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 text-[13px] focus:ring-4 focus:ring-blue-100 outline-none bg-white font-medium" 
-                          placeholder="Ketik Nomor PO untuk memunculkan data..." 
-                        />
-                      </div>
-                  </div>
-
-                  <div className="columns-1 md:columns-2 gap-6 space-y-6">
-                    {filteredPOs.length > 0 ? (
-                      filteredPOs.map(p => {
-                        const isExpanded = expandedPOs[p.idDB];
-                        return (
-                          <div key={p.idDB} className="break-inside-avoid bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col hover:shadow-md transition-shadow">
-                            <div 
-                              onClick={() => togglePO(p.idDB)}
-                              className="p-5 bg-slate-800 text-white flex justify-between items-center cursor-pointer select-none hover:bg-slate-700 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="font-bold text-[14px]">{p.poNumber}</span>
-                                <span className="bg-slate-700 text-slate-300 px-2.5 py-0.5 rounded-md text-[10px] font-semibold border border-slate-600">
-                                  {p.locations.length} Lokasi
-                                </span>
-                              </div>
-                              <div className="text-slate-400">
-                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                              </div>
-                            </div>
-                            
-                            {isExpanded && (
-                              <div className="divide-y divide-slate-100 flex-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                {p.locations.map(l => {
-                                  const s = getLocationStats(l);
-                                  const progress = l.value > 0 ? (s.totalBilled / l.value) * 100 : 0;
-                                  return (
-                                    <div key={l.id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors">
-                                      <div className="flex justify-between items-start mb-3">
-                                        <div className="flex-1 pr-4">
-                                          <h5 className="font-bold text-slate-800 text-[13px] mb-1">{l.name}</h5>
-                                          <div className="text-[12px] text-slate-500">
-                                            Sisa Saldo: <span className={`font-bold ${s.isShortageWarning ? 'text-rose-600' : 'text-slate-700'}`}>
-                                              {formatRupiah(s.remainingValue)} / {formatRupiah(l.value)}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div className="text-right">
-                                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Penyerapan</div>
-                                          <div className="text-[12px] font-bold text-blue-600">{progress.toFixed(1)}%</div>
-                                        </div>
-                                      </div>
-                                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                        <div 
-                                          className={`h-full transition-all duration-1000 ${progress >= 100 ? 'bg-emerald-500' : progress >= 80 ? 'bg-amber-500' : 'bg-blue-500'}`} 
-                                          style={{ width: `${Math.min(progress, 100)}%` }}
-                                        ></div>
-                                      </div>
-                                      <div className="flex justify-between mt-2.5">
-                                          <div className="text-[11px] font-medium text-slate-500">Kuota Dokumen: {l.usedQuota} / {l.totalQuota}</div>
-                                          {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <div className="break-inside-avoid p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl w-full">
-                          {searchPOQuery.trim() === '' ? (
-                             <>
-                               <Search size={40} className="mx-auto mb-4 opacity-30" />
-                               <p className="font-medium text-[15px] text-slate-500">Cari Master PO di sini.</p>
-                             </>
-                          ) : (
-                             <>
-                               <AlertTriangle size={40} className="mx-auto mb-4 opacity-30 text-amber-500" />
-                               <p className="font-medium text-[15px] text-slate-500">PO tidak ditemukan.</p>
-                             </>
-                          )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: DATA TAGIHAN VIEW */}
-              {activeTab === 'tab-data-tagihan' && (
-                <div className="animate-tab flex flex-col h-full">
-                  {/* Header & Export Button */}
-                  <div className="flex flex-col sm:flex-row justify-end mb-6 gap-4 mt-2">
-                    <button 
-                      onClick={handleExportExcel} 
-                      className="bg-emerald-600 text-white font-bold py-2 px-5 rounded-xl flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-emerald-700 transition-colors"
-                    >
-                      <Download size={16}/> Export ke Excel
-                    </button>
-                  </div>
-                  
-                  {/* TOOLBAR */}
-                  <div className="mb-6 flex flex-col lg:flex-row gap-4">
-                    <div className="relative flex-1">
-                      <Search size={16} className="absolute left-4 top-3 text-slate-400"/>
-                      <input 
-                        type="text" 
-                        value={searchTerm} 
-                        onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-100 outline-none bg-white font-medium" 
-                        placeholder="Cari Tagihan..." 
-                      />
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="relative">
-                        <input 
-                          type="date" 
-                          value={filterDate} 
-                          onChange={e => setFilterDate(e.target.value)} 
-                          className="w-full sm:w-auto pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-100 outline-none bg-white text-slate-600 font-medium"
-                        />
-                        {filterDate && (
-                          <button 
-                            onClick={() => setFilterDate('')} 
-                            className="absolute right-3 top-3 text-slate-400 hover:text-rose-500"
-                          >
-                            <X size={16} />
-                          </button>
-                        )}
-                      </div>
-                      {/* PILL TABS FILTER STATUS */}
-                      <div className="flex bg-slate-100 p-1.5 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-hide flex-shrink-0">
-                        <button onClick={() => setFilterStatus('all')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua Status</button>
-                        <button onClick={() => setFilterStatus('berjalan')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'berjalan' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
-                        <button onClick={() => setFilterStatus('backdate')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'backdate' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
-                        <button onClick={() => setFilterStatus('non-po')} className={`px-4 py-1.5 text-[12px] font-bold rounded-lg whitespace-nowrap transition-all ${filterStatus === 'non-po' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-PO</button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* DAFTAR DATA BERGAYA KARTU */}
-                  <div className="space-y-4 pb-8">
-                    {currentBills.map(b => {
-                      const isBackdate = b.year < currentYear;
-                      
-                      return (
-                        <div key={b.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col md:flex-row md:items-center gap-4 relative overflow-hidden group">
-                          <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${!b.hasPo ? 'bg-rose-500' : (isBackdate ? 'bg-amber-400' : 'bg-emerald-500')}`}></div>
-                          
-                          <div className="flex-1 pl-2">
-                            <div className="flex items-center gap-3 mb-1.5">
-                              <span className="text-[12px] font-bold text-slate-400 flex items-center gap-1.5">
-                                <CalendarClock size={14}/> {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                              </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isBackdate ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                                {isBackdate ? 'BACKDATE' : 'BERJALAN'}
-                              </span>
-                            </div>
-                            
-                            <h4 className="font-bold text-slate-800 text-[16px] mb-3 leading-tight pr-4">{b.title}</h4>
-
-                            <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium text-slate-600">
-                              {b.hasPo ? (
-                                <>
-                                  <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100">
-                                    <Database size={14} /> {b.poNumber}
-                                  </span>
-                                  <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                    <MapPin size={14} className="text-slate-400" /> {b.locationName || 'Lokasi terhapus'}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg border border-rose-100">
-                                  <AlertTriangle size={14} /> PENDING NON-PO
-                                </span>
-                              )}
-
-                              {b.period && (
-                                <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                  <Clock size={14} className="text-slate-400"/> {b.period}
-                                </span>
-                              )}
-
-                              {b.noBast && b.noBast !== '-' && (
-                                <span className="flex items-center gap-1.5 font-mono bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                                  <FileText size={14} className="text-slate-400"/> BAST: {b.noBast}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 border-slate-100 pt-4 md:pt-0 pr-2">
-                            <div className="text-left md:text-right">
-                              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Nilai Tagihan</span>
-                              <span className="block text-xl font-bold text-slate-800">{formatRupiah(b.amount)}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={() => handleEditClick(b)} 
-                                className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg transition-colors flex items-center gap-1.5 text-[12px] font-bold"
-                                title="Edit Tagihan"
-                              >
-                                <Edit size={14} /> Edit
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteBill(b.id)} 
-                                className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors flex items-center gap-1.5 text-[12px] font-bold"
-                                title="Hapus Tagihan"
-                              >
-                                <Trash2 size={14} /> Hapus
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    
-                    {filteredBills.length === 0 && (
-                      <div className="p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl">
-                        <Search size={40} className="mx-auto mb-4 opacity-30" />
-                        <p className="font-medium text-[15px] text-slate-500">Data tagihan tidak ditemukan.</p>
-                        <p className="text-[13px] mt-1 opacity-70">Coba sesuaikan kata kunci pencarian atau filter tahun.</p>
-                      </div>
-                    )}
-
-                    {/* PAGINATION CONTROLS */}
-                    {filteredBills.length > 0 && (
-                      <div className="pt-6 border-t border-slate-200 mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div className="text-[12px] text-slate-500 font-medium">
-                          Menampilkan {indexOfFirstBill + 1} - {Math.min(indexOfLastBill, filteredBills.length)} dari {filteredBills.length} dokumen tagihan.
-                        </div>
-                        
-                        {totalPages > 1 && (
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                              disabled={currentPage === 1}
-                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ChevronLeft size={16} />
-                            </button>
-                            
-                            {getPageNumbers().map(number => (
-                              <button
-                                key={number}
-                                onClick={() => setCurrentPage(number)}
-                                className={`px-3 py-1 rounded-lg text-[13px] font-bold transition-all ${
-                                  currentPage === number 
-                                    ? 'bg-blue-600 text-white shadow-md' 
-                                    : 'text-slate-600 hover:bg-blue-50 border border-transparent'
-                                }`}
-                              >
-                                {number}
-                              </button>
-                            ))}
-
-                            <button 
-                              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                              disabled={currentPage === totalPages}
-                              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ChevronRight size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -1878,11 +2156,10 @@ function SidebarSubButton({ id, label, activeTab, onClick }) {
       onClick={() => onClick(id)} 
       className={`flex items-center gap-3 px-4 py-2.5 rounded-xl w-full transition-all duration-200 
         ${active 
-          ? 'bg-blue-50 text-blue-600 font-bold border border-blue-100' 
-          : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600 font-medium'
+          ? 'bg-blue-50 text-[#12649b] font-bold border border-blue-100' 
+          : 'text-slate-500 hover:bg-slate-50 hover:text-[#12649b] font-medium'
         }`}
     >
-      <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-blue-600' : 'bg-transparent'}`}></div>
       <span className="text-[13px]">{label}</span>
     </button>
   );
@@ -1905,13 +2182,13 @@ function LocationAutocomplete({ value, options, onChange }) {
   
   return (
     <div className="relative" ref={ref}>
-      <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+      <Search size={14} className="absolute left-3 top-3.5 text-slate-400" />
       <input 
         type="text" 
         value={value} 
         onChange={e => { onChange(e.target.value); setOpen(true); }} 
         onFocus={() => setOpen(true)} 
-        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none" 
+        className="w-full pl-9 pr-3 py-3 rounded-lg border border-slate-300 text-[13px] focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] outline-none bg-white" 
         placeholder="Cari lokasi..." 
       />
       {open && filtered.length > 0 && (
@@ -1968,7 +2245,7 @@ function POAutocomplete({ value, options, onChange }) {
             }
           }} 
           onFocus={() => setOpen(true)} 
-          className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none bg-white" 
+          className="w-full pl-9 pr-8 py-3 rounded-lg border border-slate-300 text-[13px] focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] outline-none bg-white" 
           placeholder="Cari PO..." 
         />
         {input && (
@@ -1988,7 +2265,7 @@ function POAutocomplete({ value, options, onChange }) {
               <li 
                 key={i} 
                 onClick={() => { onChange(x); setOpen(false); }} 
-                className="px-5 py-3 text-[13px] font-bold text-blue-600 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
+                className="px-5 py-3 text-[13px] font-bold text-[#12649b] hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
               >
                 {x}
               </li>
@@ -2042,7 +2319,7 @@ function ObjectAutocomplete({ value, options, onChange, placeholder, disabled })
           }} 
           onFocus={() => { if(!disabled) setOpen(true) }} 
           disabled={disabled} 
-          className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 text-[13px] focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-300" 
+          className="w-full pl-9 pr-8 py-3 rounded-lg border border-slate-300 text-[13px] focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] outline-none disabled:bg-slate-50 disabled:text-slate-300 bg-white" 
           placeholder={placeholder} 
         />
         {input && !disabled && (
@@ -2070,7 +2347,7 @@ function ObjectAutocomplete({ value, options, onChange, placeholder, disabled })
                 className={`px-5 py-3 text-[13px] font-bold border-b border-slate-50 last:border-0 
                   ${x.disabled 
                     ? 'text-slate-300 bg-slate-50 cursor-not-allowed' 
-                    : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer'
+                    : 'text-slate-700 hover:bg-blue-50 hover:text-[#12649b] cursor-pointer'
                   }`}
               >
                 {x.label}
