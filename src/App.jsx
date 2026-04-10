@@ -2488,7 +2488,7 @@ export default function App() {
                       <div className="border-2 border-dashed border-blue-200 p-8 sm:p-12 text-center relative rounded-xl bg-blue-50/20">
                         <UploadCloud size={48} className="mx-auto text-blue-500 mb-4 opacity-40" />
                         <p className="text-[11px] sm:text-xs text-slate-400 mb-6 sm:mb-8 max-w-sm mx-auto leading-relaxed">
-                           Tarik dan lepas file Excel Tagihan Anda di sini, atau klik tombol di bawah untuk mencari file. Sistem akan memvalidasi kuota secara otomatis.
+                           Tarik dan lepas file Excel Tagihan Anda di sini, atau klik tombol di bawah untuk mencari file.
                         </p>
                         <div className="inline-block relative">
                           <input 
