@@ -2082,7 +2082,7 @@ export default function App() {
                       
                       <form onSubmit={handleSaveManualPO} className="space-y-6">
                         <div>
-                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">Nomor Induk PO <span className="text-red-500">*</span></label>
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">Nomor PO <span className="text-red-500">*</span></label>
                           <input 
                             type="text" 
                             required
@@ -2166,7 +2166,7 @@ export default function App() {
                             type="submit" 
                             className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[13px] sm:text-[14px] w-full sm:w-auto"
                           >
-                            Simpan Data PO
+                            Simpan
                           </button>
                         </div>
                       </form>
