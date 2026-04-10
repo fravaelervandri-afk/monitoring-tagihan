@@ -1739,7 +1739,7 @@ export default function App() {
                         <option value="50">50</option>
                         <option value="100">100</option>
                       </select>
-                      <span>entri per page</span>
+                      <span>entri per halaman</span>
                     </div>
 
                     <div className="relative w-full lg:w-auto">
