@@ -1739,7 +1739,7 @@ export default function App() {
                         <option value="50">50</option>
                         <option value="100">100</option>
                       </select>
-                      <span>entries per page</span>
+                      <span>entri per page</span>
                     </div>
 
                     <div className="relative w-full lg:w-auto">
@@ -2000,7 +2000,7 @@ export default function App() {
                                   {formatRupiah(b.amount)}
                                 </td>
                                 <td className="px-4 py-3 sm:py-4 text-[11px] sm:text-[12px] font-bold text-center">
-                                  <span className={isBackdate ? 'text-amber-600 bg-amber-50 px-2 py-1 rounded' : 'text-[#2bb673] bg-emerald-50 px-2 py-1 rounded'}>{isBackdate ? 'Backdate' : 'Selesai'}</span>
+                                  <span className={isBackdate ? 'text-amber-600 bg-amber-50 px-2 py-1 rounded' : 'text-[#2bb673] bg-emerald-50 px-2 py-1 rounded'}>{isBackdate ? 'Backdate' : 'Closed'}</span>
                                 </td>
                                 <td className="px-4 py-3 sm:py-4 text-[13px] text-center">
                                   <div className="flex items-center justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
