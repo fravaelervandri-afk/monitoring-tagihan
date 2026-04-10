@@ -7,7 +7,7 @@ import {
   Monitor, Home, CalendarClock, History, Database,
   FileText, FilePlus, FileEdit, Clock, AlertTriangle, 
   CheckCircle, Trash2, Plus, UploadCloud, FileSpreadsheet, Save, X, Search,
-  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, User, Check
+  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, User, Check, Menu
 } from 'lucide-react';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -67,6 +67,9 @@ export default function App() {
   const [readNotifs, setReadNotifs] = useState([]);
   const notifRef = useRef(null);
 
+  // State untuk Sidebar Responsif (Mobile)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // State untuk Accordion Menu di Sidebar
   const [sidebarMenu, setSidebarMenu] = useState({ po: true, tagihan: true });
 
@@ -75,6 +78,12 @@ export default function App() {
 
   const toggleSidebarMenu = (menu) => {
     setSidebarMenu(prev => ({ ...prev, [menu]: !prev[menu] }));
+  };
+
+  // Fungsi Pindah Tab & Tutup Sidebar di HP
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setIsSidebarOpen(false); // Otomatis tutup sidebar di mode mobile
   };
 
   // Bersihkan target tindak lanjut jika user batal (pindah halaman)
@@ -1204,7 +1213,7 @@ export default function App() {
     setFollowUpTarget({ poNumber: pk.poNumber, locationId: pk.location.id });
 
     // 2. Redirect ke form Input PO Baru & Pre-fill data
-    setActiveTab('tab-input-po');
+    handleTabChange('tab-input-po');
     setSidebarMenu(prev => ({ ...prev, po: true }));
     setInputMode('manual');
     setIsNotifOpen(false); // Tutup dropdown notif jika terbuka
@@ -1237,7 +1246,7 @@ export default function App() {
     }
     setSearchPOQuery(pk.poNumber);
     setExpandedPOs(prev => ({ ...prev, [pk.poIdDB]: true }));
-    setActiveTab('tab-master-po');
+    handleTabChange('tab-master-po');
     setSidebarMenu(prev => ({ ...prev, po: true }));
     setIsNotifOpen(false);
   };
@@ -1248,7 +1257,7 @@ export default function App() {
   const getBreadcrumbs = () => {
     const renderHome = () => (
       <span 
-        onClick={() => setActiveTab('tab-home')} 
+        onClick={() => handleTabChange('tab-home')} 
         className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors flex items-center"
       >
         <Home size={14} className="inline mr-1.5 -mt-0.5" /> Beranda
@@ -1258,15 +1267,15 @@ export default function App() {
 
     switch(activeTab) {
       case 'tab-home': 
-        return <div className="flex items-center">{renderHome()} {separator} <span className="text-[#12649b] font-semibold">Dashboard</span></div>;
+        return <div className="flex flex-wrap items-center gap-y-1">{renderHome()} {separator} <span className="text-[#12649b] font-semibold">Dashboard</span></div>;
       case 'tab-master-po': 
-        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">Data PO</span></div>;
+        return <div className="flex flex-wrap items-center gap-y-1">{renderHome()} {separator} <span onClick={() => {handleTabChange('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">Data PO</span></div>;
       case 'tab-data-tagihan': 
-        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Data Tagihan</span></div>;
+        return <div className="flex flex-wrap items-center gap-y-1">{renderHome()} {separator} <span onClick={() => {handleTabChange('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Data Tagihan</span></div>;
       case 'tab-input-tagihan': 
-        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Tagihan Baru</span></div>;
+        return <div className="flex flex-wrap items-center gap-y-1">{renderHome()} {separator} <span onClick={() => {handleTabChange('tab-data-tagihan'); setSidebarMenu(p => ({...p, tagihan: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">Tagihan</span> {separator} <span className="text-[#12649b] font-semibold">Tagihan Baru</span></div>;
       case 'tab-input-po': 
-        return <div className="flex items-center">{renderHome()} {separator} <span onClick={() => {setActiveTab('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">PO Baru</span></div>;
+        return <div className="flex flex-wrap items-center gap-y-1">{renderHome()} {separator} <span onClick={() => {handleTabChange('tab-master-po'); setSidebarMenu(p => ({...p, po: true}))}} className="cursor-pointer hover:text-[#12649b] text-slate-500 transition-colors">PO</span> {separator} <span className="text-[#12649b] font-semibold">PO Baru</span></div>;
       default: 
         return <div className="flex items-center">{renderHome()}</div>;
     }
@@ -1275,10 +1284,10 @@ export default function App() {
   const getPageTitleString = () => {
     switch(activeTab) {
       case 'tab-home': return 'Dashboard Monitoring';
-      case 'tab-master-po': return ''; // Disembunyikan karena judul ada di dalam border box
-      case 'tab-data-tagihan': return ''; // Disembunyikan karena judul ada di dalam border box
-      case 'tab-input-tagihan': return ''; // Disembunyikan karena judul ada di dalam border box
-      case 'tab-input-po': return ''; // Disembunyikan karena judul dipindah ke form border box
+      case 'tab-master-po': return ''; 
+      case 'tab-data-tagihan': return ''; 
+      case 'tab-input-tagihan': return ''; 
+      case 'tab-input-po': return ''; 
       default: return 'Aplikasi Monitoring';
     }
   };
@@ -1315,14 +1324,14 @@ export default function App() {
       {/* MODAL EDIT TAGIHAN */}
       {editingBill && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl animate-in fade-in zoom-in duration-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 sm:mx-auto animate-in fade-in zoom-in duration-200 overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Edit size={18}/> Edit Tagihan</h3>
               <button onClick={() => setEditingBill(null)} className="text-slate-400 hover:text-rose-500"><X size={20}/></button>
             </div>
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
+            <form onSubmit={handleSaveEdit} className="p-4 sm:p-6 space-y-4">
                {/* Read Only Data (PO & Lokasi) */}
-               <div className="bg-slate-100 p-3 rounded-lg flex items-center gap-4 text-[13px] mb-4">
+               <div className="bg-slate-100 p-3 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-[13px] mb-4">
                  <div className="flex-1">
                    <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Referensi PO (Terkunci)</span>
                    <span className="font-semibold text-slate-700">{editingBill.poNumber}</span>
@@ -1402,14 +1411,23 @@ export default function App() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* SIDEBAR KIRI (LIGHT THEME) */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col z-20">
+      <div className="flex flex-1 overflow-hidden relative w-full">
+        
+        {/* OVERLAY UNTUK MOBILE SIDEBAR */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-900/50 z-30 md:hidden" 
+            onClick={() => setIsSidebarOpen(false)} 
+          />
+        )}
+
+        {/* SIDEBAR KIRI */}
+        <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="flex flex-col px-6 py-4 mb-4 mt-2">
             <img 
               src="/logo-elnusa.png" 
               alt="Logo ELnusa" 
-              className="h-10 w-auto object-contain object-left"
+              className="h-16 w-auto object-contain object-left"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = "https://via.placeholder.com/150x40/ffffff/0f172a?text=MONITOR+TAGIHAN";
@@ -1422,7 +1440,7 @@ export default function App() {
             {/* Dashboard Standalone */}
             <div>
               <button 
-                onClick={() => setActiveTab('tab-home')} 
+                onClick={() => handleTabChange('tab-home')} 
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl w-full transition-all duration-200 
                   ${activeTab === 'tab-home' 
                     ? 'bg-blue-50 text-[#12649b] font-bold' 
@@ -1446,8 +1464,8 @@ export default function App() {
               
               {sidebarMenu.po && (
                 <div className="mt-1 space-y-1 pl-4">
-                  <SidebarSubButton id="tab-master-po" label="Daftar PO" activeTab={activeTab} onClick={setActiveTab} />
-                  <SidebarSubButton id="tab-input-po" label="Input PO Baru" activeTab={activeTab} onClick={setActiveTab} />
+                  <SidebarSubButton id="tab-master-po" label="Daftar PO" activeTab={activeTab} onClick={handleTabChange} />
+                  <SidebarSubButton id="tab-input-po" label="Input PO Baru" activeTab={activeTab} onClick={handleTabChange} />
                 </div>
               )}
             </div>
@@ -1466,8 +1484,8 @@ export default function App() {
               
               {sidebarMenu.tagihan && (
                 <div className="mt-1 space-y-1 pl-4">
-                  <SidebarSubButton id="tab-data-tagihan" label="Daftar Tagihan" activeTab={activeTab} onClick={setActiveTab} />
-                  <SidebarSubButton id="tab-input-tagihan" label="Input Tagihan Baru" activeTab={activeTab} onClick={setActiveTab} />
+                  <SidebarSubButton id="tab-data-tagihan" label="Daftar Tagihan" activeTab={activeTab} onClick={handleTabChange} />
+                  <SidebarSubButton id="tab-input-tagihan" label="Input Tagihan Baru" activeTab={activeTab} onClick={handleTabChange} />
                 </div>
               )}
             </div>
@@ -1476,15 +1494,21 @@ export default function App() {
         </aside>
 
         {/* KONTEN UTAMA KANAN */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 relative w-full">
           
           {/* HEADER TOPBAR KONTEKSTUAL */}
-          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-10">
-            <div className="text-[13px] text-slate-500 font-medium flex items-center">
+          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 flex-shrink-0 z-10 w-full">
+            <div className="text-[11px] sm:text-[13px] text-slate-500 font-medium flex items-center gap-2">
+              <button 
+                onClick={() => setIsSidebarOpen(true)} 
+                className="p-1 -ml-1 text-slate-500 hover:bg-slate-100 rounded-md md:hidden"
+              >
+                <Menu size={20} />
+              </button>
               {getBreadcrumbs()}
             </div>
             
-            <div className="flex items-center gap-5 relative">
+            <div className="flex items-center gap-3 sm:gap-5 relative">
               {/* Notifikasi Lonceng */}
               <div className="relative" ref={notifRef}>
                 <button 
@@ -1499,7 +1523,7 @@ export default function App() {
                 
                 {/* Dropdown Notifikasi */}
                 {isNotifOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="absolute right-[-10px] sm:right-0 mt-2 w-[90vw] max-w-[320px] sm:w-80 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                       <h4 className="font-bold text-[13px] text-slate-700">Notifikasi ({unreadPoKritis.length})</h4>
                     </div>
@@ -1512,18 +1536,18 @@ export default function App() {
                               className="p-4 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-start gap-3 border-b border-slate-50 last:border-0"
                               onClick={() => handleNotifClick(pk)}
                             >
-                              <div className="mt-0.5 bg-rose-100 p-1.5 rounded-full text-rose-500">
+                              <div className="mt-0.5 bg-rose-100 p-1.5 rounded-full text-rose-500 flex-shrink-0">
                                 <AlertTriangle size={14} />
                               </div>
-                              <div className="flex-1">
-                                <p className="text-[13px] font-bold text-slate-800 hover:text-blue-600 transition-colors">{pk.poNumber}</p>
-                                <div className="flex justify-between items-end mt-1">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-bold text-slate-800 hover:text-blue-600 transition-colors truncate">{pk.poNumber}</p>
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mt-1 gap-2 sm:gap-0">
                                   <p className="text-[11px] text-slate-500 leading-snug pr-2">
                                     Lokasi <span className="font-semibold text-slate-700">{pk.location.name}</span> butuh atensi.
                                   </p>
                                   <button 
                                      onClick={(e) => { e.stopPropagation(); handleTindakLanjut(pk); }}
-                                     className="text-[10px] font-bold bg-[#12649b] text-white px-2 py-1 rounded shadow-sm hover:bg-blue-800 transition-colors whitespace-nowrap"
+                                     className="text-[10px] font-bold bg-[#12649b] text-white px-2 py-1 rounded shadow-sm hover:bg-blue-800 transition-colors whitespace-nowrap w-fit"
                                   >
                                      Tindak Lanjut
                                   </button>
@@ -1549,7 +1573,7 @@ export default function App() {
                   <p className="text-[14px] font-bold text-[#12649b] group-hover:text-blue-700 transition-colors tracking-tight">RTC Support</p>
                   <p className="text-[11px] text-slate-500 uppercase tracking-widest font-semibold mt-0.5">Elnusa Petrofin</p>
                 </div>
-                <div className="h-10 w-10 bg-white border-2 border-slate-100 text-slate-400 rounded-full flex items-center justify-center shadow-sm group-hover:shadow transition-all group-hover:text-[#12649b] group-hover:border-blue-100">
+                <div className="h-10 w-10 bg-white border-2 border-slate-100 text-slate-400 rounded-full flex items-center justify-center shadow-sm group-hover:shadow transition-all group-hover:text-[#12649b] group-hover:border-blue-100 flex-shrink-0">
                   <User size={20} />
                 </div>
               </div>
@@ -1557,12 +1581,12 @@ export default function App() {
           </header>
 
           {/* AREA SCROLL KONTEN */}
-          <div className="flex-1 overflow-y-auto main-scroll px-8 pb-8 pt-6">
-            <div className="max-w-6xl mx-auto">
+          <div className="flex-1 overflow-y-auto main-scroll px-4 sm:px-8 pb-8 pt-6 w-full">
+            <div className="max-w-6xl mx-auto w-full">
               
               {/* Main Content Title */}
               {getPageTitleString() && (
-                 <h2 className="text-[22px] font-bold text-slate-800 mb-6">{getPageTitleString()}</h2>
+                 <h2 className="text-[20px] sm:text-[22px] font-bold text-slate-800 mb-6">{getPageTitleString()}</h2>
               )}
 
               {/* TAB: DASHBOARD HOME */}
@@ -1571,68 +1595,68 @@ export default function App() {
                   
                   {/* Baris Atas: 3 KPI Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group" 
-                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('berjalan'); setCurrentPage(1); }}>
+                    <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group" 
+                         onClick={() => { handleTabChange('tab-data-tagihan'); setFilterStatus('berjalan'); setCurrentPage(1); }}>
                       <div className="flex justify-between items-start mb-2 lg:mb-4">
                          <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tagihan Berjalan</h3>
                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:scale-110 transition-transform"><CalendarClock size={16}/></div>
                       </div>
-                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBerjalan)}>{formatRupiah(totalBerjalan)}</div>
+                      <div className="text-xl sm:text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBerjalan)}>{formatRupiah(totalBerjalan)}</div>
                       <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-blue-600 font-bold">{berjalanBills.length}</span> Dokumen</div>
                     </div>
                     
-                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group" 
-                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('backdate'); setCurrentPage(1); }}>
+                    <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group" 
+                         onClick={() => { handleTabChange('tab-data-tagihan'); setFilterStatus('backdate'); setCurrentPage(1); }}>
                       <div className="flex justify-between items-start mb-2 lg:mb-4">
                          <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tunggakan Backdate</h3>
                          <div className="p-2 bg-amber-50 rounded-lg text-amber-600 group-hover:scale-110 transition-transform"><History size={16}/></div>
                       </div>
-                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBackdate)}>{formatRupiah(totalBackdate)}</div>
+                      <div className="text-xl sm:text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalBackdate)}>{formatRupiah(totalBackdate)}</div>
                       <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-amber-600 font-bold">{backdateBills.length}</span> Dokumen</div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all group" 
-                         onClick={() => { setActiveTab('tab-master-po'); }}>
+                    <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all group" 
+                         onClick={() => { handleTabChange('tab-master-po'); }}>
                       <div className="flex justify-between items-start mb-2 lg:mb-4">
                          <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Total Kontrak PO</h3>
                          <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 group-hover:scale-110 transition-transform"><Database size={16}/></div>
                       </div>
-                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNilaiPO)}>{formatRupiah(totalNilaiPO)}</div>
+                      <div className="text-xl sm:text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNilaiPO)}>{formatRupiah(totalNilaiPO)}</div>
                       <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-emerald-600 font-bold">{pos.length}</span> Master Aktif</div>
                     </div>
                   </div>
 
                   {/* Baris Tengah: Grafik Serapan */}
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 lg:p-8">
+                  <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 lg:p-8">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-end mb-4 gap-4">
                       <div>
-                        <h3 className="font-bold text-slate-800 text-[16px]">Serapan Anggaran PO (Rupiah)</h3>
-                        <p className="text-[13px] text-slate-500 mt-1">Persentase nominal PO yang sudah ditagihkan ke sistem.</p>
+                        <h3 className="font-bold text-slate-800 text-[15px] sm:text-[16px]">Serapan Anggaran PO (Rupiah)</h3>
+                        <p className="text-[12px] sm:text-[13px] text-slate-500 mt-1">Persentase nominal PO yang sudah ditagihkan ke sistem.</p>
                       </div>
-                      <div className="text-right">
-                        <span className="text-3xl font-bold text-slate-800 leading-none">{persentaseSerapan.toFixed(1)}%</span>
+                      <div className="text-left sm:text-right">
+                        <span className="text-2xl sm:text-3xl font-bold text-slate-800 leading-none">{persentaseSerapan.toFixed(1)}%</span>
                       </div>
                     </div>
                     <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-3">
                        <div className={`h-full transition-all duration-1000 ${persentaseSerapan > 90 ? 'bg-rose-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(persentaseSerapan, 100)}%` }}></div>
                     </div>
-                    <div className="flex justify-between text-[12px] font-semibold">
+                    <div className="flex flex-col sm:flex-row justify-between text-[11px] sm:text-[12px] font-semibold gap-1 sm:gap-0">
                        <span className="text-blue-600 truncate mr-2" title={`Terpakai: ${formatRupiah(totalDitagihkan)}`}>Terpakai: {formatRupiah(totalDitagihkan)}</span>
-                       <span className="text-emerald-600 truncate text-right" title={`Sisa Anggaran: ${formatRupiah(sisaNilaiPO)}`}>Sisa: {formatRupiah(sisaNilaiPO)}</span>
+                       <span className="text-emerald-600 truncate sm:text-right" title={`Sisa Anggaran: ${formatRupiah(sisaNilaiPO)}`}>Sisa: {formatRupiah(sisaNilaiPO)}</span>
                     </div>
                   </div>
 
                   {/* Baris Bawah: Panel Atensi & Aktivitas */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                      {/* Kolom Kiri: PO Kritis */}
-                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
-                        <h3 className="font-bold text-slate-800 text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                     <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 flex flex-col h-full w-full overflow-hidden">
+                        <h3 className="font-bold text-slate-800 text-[15px] sm:text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
                            <AlertTriangle size={18} className="text-amber-500" /> Butuh Atensi (PO Kritis)
                         </h3>
                         <div className="space-y-3 flex-1">
                            {poKritis.length > 0 ? poKritis.slice(0, 4).map((pk, idx) => (
-                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center hover:border-amber-200 hover:shadow-sm transition-all">
-                                 <div className="overflow-hidden pr-2 flex-1 cursor-pointer" onClick={() => handleNotifClick(pk)}>
+                              <div key={idx} className="p-3 sm:p-4 rounded-xl border border-slate-100 bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center hover:border-amber-200 hover:shadow-sm transition-all gap-3 sm:gap-0">
+                                 <div className="overflow-hidden pr-2 flex-1 w-full cursor-pointer" onClick={() => handleNotifClick(pk)}>
                                     <div className="font-bold text-slate-800 text-[13px] mb-1 truncate hover:text-blue-600 transition-colors">{pk.poNumber}</div>
                                     <div className="text-[12px] text-slate-500 truncate">{pk.location.name}</div>
                                     {pk.stats.isShortageWarning && (
@@ -1643,8 +1667,8 @@ export default function App() {
                                         </div>
                                     )}
                                  </div>
-                                 <div className="flex flex-col items-end gap-2 whitespace-nowrap ml-2">
-                                    <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                                 <div className="flex flex-row sm:flex-col items-center sm:items-end w-full sm:w-auto justify-between sm:justify-start gap-2 whitespace-nowrap sm:ml-2">
+                                    <div className="text-[10px] sm:text-[11px] font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
                                       Sisa {pk.location.totalQuota - pk.location.usedQuota}x Tagih
                                     </div>
                                     <button 
@@ -1658,35 +1682,35 @@ export default function App() {
                            )) : (
                               <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
                                  <CheckCircle size={32} className="mb-3 opacity-50" />
-                                 <span className="text-[13px] font-medium">Semua kuota PO masih aman.</span>
+                                 <span className="text-[12px] sm:text-[13px] font-medium">Semua kuota PO masih aman.</span>
                               </div>
                            )}
                         </div>
                      </div>
 
                      {/* Kolom Kanan: Tagihan Terbaru */}
-                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-full">
-                        <h3 className="font-bold text-slate-800 text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
+                     <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 flex flex-col h-full w-full overflow-hidden">
+                        <h3 className="font-bold text-slate-800 text-[15px] sm:text-[16px] mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
                            <History size={18} className="text-[#12649b]" /> Histori Tagihan Masuk
                         </h3>
-                        <div className="space-y-3 flex-1 overflow-y-auto pr-2 main-scroll max-h-[300px]">
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 sm:pr-2 main-scroll max-h-[300px]">
                            {tagihanTerakhir.length > 0 ? tagihanTerakhir.map(b => (
-                              <div key={b.id} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group" 
-                                   onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('all'); setSearchTerm(b.title); setCurrentPage(1); }}>
-                                 <div className="flex justify-between items-start mb-2">
-                                    <div className="font-bold text-[13px] text-[#12649b] truncate pr-4 group-hover:text-blue-800 transition-colors" title={b.title}>{b.title}</div>
-                                    <div className="font-bold text-[13px] text-slate-800 whitespace-nowrap">{formatRupiah(b.amount)}</div>
+                              <div key={b.id} className="p-3 sm:p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-pointer group" 
+                                   onClick={() => { handleTabChange('tab-data-tagihan'); setFilterStatus('all'); setSearchTerm(b.title); setCurrentPage(1); }}>
+                                 <div className="flex justify-between items-start mb-2 gap-2">
+                                    <div className="font-bold text-[12px] sm:text-[13px] text-[#12649b] truncate pr-2 sm:pr-4 group-hover:text-blue-800 transition-colors" title={b.title}>{b.title}</div>
+                                    <div className="font-bold text-[12px] sm:text-[13px] text-slate-800 whitespace-nowrap">{formatRupiah(b.amount)}</div>
                                  </div>
-                                 <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5"><CalendarClock size={12} className="text-slate-400" /> {new Date(b.date).toLocaleDateString('id-ID')}</span>
-                                    <span className="text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                 <div className="flex items-center justify-between mt-1">
+                                    <span className="text-[10px] sm:text-[11px] font-medium text-slate-500 flex items-center gap-1.5"><CalendarClock size={12} className="text-slate-400" /> {new Date(b.date).toLocaleDateString('id-ID')}</span>
+                                    <span className="text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase bg-emerald-50 text-emerald-600 border border-emerald-100 truncate max-w-[100px] sm:max-w-none text-right">
                                        {b.poNumber}
                                     </span>
                                  </div>
                               </div>
                            )) : (
                               <div className="h-full flex flex-col items-center justify-center text-slate-500 py-8">
-                                 <span className="text-[13px] font-medium">Belum ada tagihan diinput.</span>
+                                 <span className="text-[12px] sm:text-[13px] font-medium">Belum ada tagihan diinput.</span>
                               </div>
                            )}
                         </div>
@@ -1703,8 +1727,8 @@ export default function App() {
                   </div>
 
                   {/* TOOLBAR */}
-                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
-                    <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
+                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-3 sm:p-4 border border-slate-200 rounded-t-xl shadow-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-slate-700 w-full lg:w-auto">
                       <select 
                         value={itemsPerPagePO} 
                         onChange={e => setItemsPerPagePO(Number(e.target.value))}
@@ -1718,36 +1742,36 @@ export default function App() {
                       <span>entries per page</span>
                     </div>
 
-                    <div className="relative w-full sm:w-auto">
+                    <div className="relative w-full lg:w-auto">
                       <input 
                         type="text" 
                         value={searchPOQuery} 
                         onChange={e => setSearchPOQuery(e.target.value)} 
-                        className="w-full sm:w-64 pl-3 pr-8 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
+                        className="w-full sm:w-64 pl-3 pr-8 py-2 sm:py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
                         placeholder="Cari No. PO..." 
                       />
                       {searchPOQuery ? (
-                        <button onClick={() => setSearchPOQuery('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-500">
-                           <X size={14} />
+                        <button onClick={() => setSearchPOQuery('')} className="absolute right-2.5 top-2 sm:top-1.5 text-slate-400 hover:text-rose-500">
+                           <X size={16} sm:size={14} />
                         </button>
                       ) : (
-                        <Search size={14} className="absolute right-2.5 top-2 text-slate-400"/>
+                        <Search size={16} className="absolute right-2.5 top-2.5 sm:top-2 text-slate-400"/>
                       )}
                     </div>
                   </div>
 
                   {/* TABEL PO */}
-                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-lg shadow-sm overflow-hidden mb-4">
+                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-xl shadow-sm overflow-hidden mb-4">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse min-w-max">
+                      <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead className="bg-[#12649b] text-white">
                           <tr>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">No PO</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Total Lokasi</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Total Nilai PO</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Serapan Rupiah</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Status Serapan</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Detail</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">No PO</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Total Lokasi</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Total Nilai PO</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Serapan Rupiah</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Status Serapan</th>
+                            <th className="px-4 py-3 sm:py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Detail</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
@@ -1764,19 +1788,19 @@ export default function App() {
                                   className={`transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50/50' : (index % 2 === 0 ? 'bg-white' : 'bg-[#f4f6f9] hover:bg-slate-100')}`} 
                                   onClick={() => togglePO(p.idDB)}
                                 >
-                                  <td className="px-4 py-4 text-[14px] font-bold text-[#12649b]">{p.poNumber}</td>
-                                  <td className="px-4 py-4 text-[13px] text-slate-600 font-semibold text-center">{p.locations.length} Lokasi</td>
-                                  <td className="px-4 py-4 text-[13px] font-bold text-slate-700">{formatRupiah(totalValue)}</td>
-                                  <td className="px-4 py-4 text-[13px] font-bold text-slate-700">{formatRupiah(totalBilled)}</td>
-                                  <td className="px-4 py-4 text-[13px] text-center">
+                                  <td className="px-4 py-3 sm:py-4 text-[13px] sm:text-[14px] font-bold text-[#12649b]">{p.poNumber}</td>
+                                  <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] text-slate-600 font-semibold text-center">{p.locations.length} Lokasi</td>
+                                  <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] font-bold text-slate-700">{formatRupiah(totalValue)}</td>
+                                  <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] font-bold text-slate-700">{formatRupiah(totalBilled)}</td>
+                                  <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] text-center">
                                      <div className="flex items-center justify-center gap-2">
-                                        <div className="w-24 bg-slate-200 h-2 rounded-full overflow-hidden">
+                                        <div className="w-16 sm:w-24 bg-slate-200 h-2 rounded-full overflow-hidden">
                                            <div className={`h-full ${progress >= 100 ? 'bg-emerald-500' : progress >= 80 ? 'bg-amber-500' : 'bg-[#12649b]'}`} style={{ width: `${Math.min(progress, 100)}%` }}></div>
                                         </div>
-                                        <span className="text-[11px] font-bold text-slate-600 w-8 text-right">{progress.toFixed(0)}%</span>
+                                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-600 w-6 sm:w-8 text-right">{progress.toFixed(0)}%</span>
                                      </div>
                                   </td>
-                                  <td className="px-4 py-4 text-center text-slate-400">
+                                  <td className="px-4 py-3 sm:py-4 text-center text-slate-400">
                                     {isExpanded ? <ChevronUp size={18} className="mx-auto text-[#12649b]" /> : <ChevronDown size={18} className="mx-auto" />}
                                   </td>
                                 </tr>
@@ -1784,26 +1808,26 @@ export default function App() {
                                 {isExpanded && (
                                   <tr>
                                     <td colSpan="6" className="p-0 bg-slate-50 border-b-2 border-blue-200 shadow-inner">
-                                      <div className="p-6">
-                                        <h4 className="text-[14px] font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Rincian Lokasi: <span className="text-[#12649b]">{p.poNumber}</span></h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                      <div className="p-4 sm:p-6">
+                                        <h4 className="text-[13px] sm:text-[14px] font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Rincian Lokasi: <span className="text-[#12649b]">{p.poNumber}</span></h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                           {p.locations.map(l => {
                                             const s = getLocationStats(l, p.poNumber);
                                             const locProgress = l.value > 0 ? (s.totalBilled / l.value) * 100 : 0;
                                             return (
                                               <div key={l.id} className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow transition-shadow">
                                                 <div className="flex justify-between items-start mb-3">
-                                                  <div className="flex-1 pr-4">
-                                                    <h5 className="font-bold text-slate-800 text-[13px] mb-1">{l.name}</h5>
-                                                    <div className="text-[11px] text-slate-500">
+                                                  <div className="flex-1 pr-2 sm:pr-4">
+                                                    <h5 className="font-bold text-slate-800 text-[12px] sm:text-[13px] mb-1">{l.name}</h5>
+                                                    <div className="text-[10px] sm:text-[11px] text-slate-500">
                                                       Sisa Saldo: <span className={`font-bold ${s.isShortageWarning ? 'text-rose-600' : 'text-slate-700'}`}>
                                                         {formatRupiah(s.remainingValue)} / {formatRupiah(l.value)}
                                                       </span>
                                                     </div>
                                                   </div>
                                                   <div className="text-right">
-                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Serapan</div>
-                                                    <div className="text-[12px] font-bold text-[#12649b]">{locProgress.toFixed(1)}%</div>
+                                                    <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Serapan</div>
+                                                    <div className="text-[11px] sm:text-[12px] font-bold text-[#12649b]">{locProgress.toFixed(1)}%</div>
                                                   </div>
                                                 </div>
                                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2.5">
@@ -1812,12 +1836,12 @@ export default function App() {
                                                     style={{ width: `${Math.min(locProgress, 100)}%` }}
                                                   ></div>
                                                 </div>
-                                                <div className="flex justify-between items-center mt-3">
-                                                    <div className="text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
+                                                <div className="flex flex-col sm:flex-row justify-between sm:items-center mt-3 gap-2 sm:gap-0">
+                                                    <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
                                                     {s.isShortageWarning && (
                                                       <button 
                                                         onClick={() => handleTindakLanjut({ poIdDB: p.idDB, poNumber: p.poNumber, location: l, stats: s })}
-                                                        className="text-[10px] font-bold bg-rose-500 text-white px-2 py-1 rounded shadow-sm hover:bg-rose-600 transition-colors flex items-center gap-1"
+                                                        className="text-[9px] sm:text-[10px] font-bold bg-rose-500 text-white px-2 py-1 rounded shadow-sm hover:bg-rose-600 transition-colors flex items-center justify-center gap-1 w-full sm:w-auto"
                                                       >
                                                         <AlertTriangle size={10}/> Tindak Lanjut
                                                       </button>
@@ -1837,7 +1861,7 @@ export default function App() {
                             <tr>
                               <td colSpan="6" className="p-8 text-center text-slate-500">
                                 <AlertTriangle size={32} className="mx-auto mb-2 opacity-30 text-amber-500" />
-                                <p className="text-[14px]">Data PO tidak ditemukan.</p>
+                                <p className="text-[13px] sm:text-[14px]">Data PO tidak ditemukan.</p>
                               </td>
                             </tr>
                           )}
@@ -1847,25 +1871,25 @@ export default function App() {
                   </div>
 
                   {filteredPOs.length > 0 && (
-                    <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
-                      <div>
+                    <div className="flex flex-col sm:flex-row justify-between items-center text-[12px] sm:text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-xl shadow-sm gap-3 sm:gap-0">
+                      <div className="text-center sm:text-left">
                         Menampilkan <span className="font-bold">{indexOfFirstPO + 1}</span> hingga <span className="font-bold">{Math.min(indexOfLastPO, filteredPOs.length)}</span> dari <span className="font-bold">{filteredPOs.length}</span> entri
                       </div>
                       
-                      <div className="flex items-center gap-1 mt-3 sm:mt-0">
+                      <div className="flex items-center gap-1 w-full sm:w-auto justify-between sm:justify-start">
                         <button 
                           onClick={() => setCurrentPagePO(prev => Math.max(prev - 1, 1))}
                           disabled={currentPagePO === 1}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          <ChevronLeft size={14} /> Sebelumnya
+                          <ChevronLeft size={14} /> <span className="hidden sm:inline">Sebelumnya</span>
                         </button>
                         <button 
                           onClick={() => setCurrentPagePO(prev => Math.min(prev + 1, totalPagesPO))}
                           disabled={currentPagePO === totalPagesPO}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          Selanjutnya <ChevronRight size={14} />
+                          <span className="hidden sm:inline">Selanjutnya</span> <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
@@ -1876,18 +1900,18 @@ export default function App() {
               {/* TAB: DATA TAGIHAN VIEW */}
               {activeTab === 'tab-data-tagihan' && (
                 <div className="animate-tab flex flex-col h-full">
-                  <div className="flex flex-col sm:flex-row justify-between mb-4 gap-4 items-center mt-2">
+                  <div className="flex flex-col sm:flex-row justify-between mb-4 gap-4 items-start sm:items-center mt-2">
                     <h3 className="font-bold text-[18px] text-slate-800">Daftar Tagihan</h3>
                     <button 
                       onClick={handleExportExcel} 
-                      className="bg-[#12649b] text-white font-bold py-2 px-5 rounded flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-blue-800 transition-colors"
+                      className="bg-[#12649b] text-white font-bold py-2 px-5 rounded-lg flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-blue-800 transition-colors w-full sm:w-auto"
                     >
                       <Download size={16}/> Ekspor ke Excel
                     </button>
                   </div>
                   
-                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
-                    <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
+                  <div className="mb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-3 sm:p-4 border border-slate-200 rounded-t-xl shadow-sm">
+                    <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-slate-700 w-full lg:w-auto">
                       <select 
                         value={itemsPerPage} 
                         onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -1902,20 +1926,20 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
-                      <div className="flex bg-slate-100 p-1 rounded-md overflow-x-auto scrollbar-hide">
-                        <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'all' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
-                        <button onClick={() => setFilterStatus('berjalan')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'berjalan' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
-                        <button onClick={() => setFilterStatus('backdate')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'backdate' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
+                      <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto scrollbar-hide w-full sm:w-auto">
+                        <button onClick={() => setFilterStatus('all')} className={`flex-1 sm:flex-none px-3 py-1.5 text-[11px] sm:text-[12px] font-bold rounded-md ${filterStatus === 'all' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+                        <button onClick={() => setFilterStatus('berjalan')} className={`flex-1 sm:flex-none px-3 py-1.5 text-[11px] sm:text-[12px] font-bold rounded-md ${filterStatus === 'berjalan' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
+                        <button onClick={() => setFilterStatus('backdate')} className={`flex-1 sm:flex-none px-3 py-1.5 text-[11px] sm:text-[12px] font-bold rounded-md ${filterStatus === 'backdate' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
                       </div>
-                      <div className="relative">
+                      <div className="relative w-full sm:w-auto">
                         <input 
                           type="date" 
                           value={filterDate} 
                           onChange={e => setFilterDate(e.target.value)} 
-                          className="w-full sm:w-auto px-3 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white text-slate-600"
+                          className="w-full px-3 py-2 sm:py-1.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white text-slate-600"
                         />
                         {filterDate && (
-                          <button onClick={() => setFilterDate('')} className="absolute right-8 top-2 text-slate-400 hover:text-rose-500">
+                          <button onClick={() => setFilterDate('')} className="absolute right-8 top-2.5 sm:top-2 text-slate-400 hover:text-rose-500">
                             <X size={14} />
                           </button>
                         )}
@@ -1925,23 +1949,23 @@ export default function App() {
                           type="text" 
                           value={searchTerm} 
                           onChange={e => setSearchTerm(e.target.value)} 
-                          className="w-full sm:w-64 pl-3 pr-8 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
+                          className="w-full sm:w-64 pl-3 pr-8 py-2 sm:py-1.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
                           placeholder="Pencarian..." 
                         />
                         {searchTerm ? (
-                          <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-500">
+                          <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2.5 sm:top-2 text-slate-400 hover:text-rose-500">
                              <X size={14} />
                           </button>
                         ) : (
-                          <Search size={14} className="absolute right-2.5 top-2 text-slate-400"/>
+                          <Search size={14} className="absolute right-2.5 top-2.5 sm:top-2 text-slate-400"/>
                         )}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-lg shadow-sm overflow-hidden mb-4">
+                  <div className="bg-white border border-slate-200 border-t-0 rounded-b-xl shadow-sm overflow-hidden mb-4">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse min-w-max">
+                      <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead className="bg-[#12649b] text-white">
                           <tr>
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Uraian Tagihan</th>
@@ -1958,28 +1982,28 @@ export default function App() {
                             const isBackdate = b.year < currentYear;
                             return (
                               <tr key={b.id} className={index % 2 === 0 ? 'bg-white' : 'bg-[#f4f6f9] hover:bg-slate-100 transition-colors'}>
-                                <td className="px-4 py-4 text-[13px]">
+                                <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px]">
                                   <span className="font-bold text-[#12649b] hover:underline cursor-pointer" onClick={() => handleEditClick(b)}>{b.title}</span>
-                                  {b.noBast && b.noBast !== '-' && <div className="text-[11px] text-slate-500 mt-1 font-mono">BAST: {b.noBast}</div>}
+                                  {b.noBast && b.noBast !== '-' && <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1 font-mono">BAST: {b.noBast}</div>}
                                 </td>
-                                <td className="px-4 py-4 text-[13px] text-slate-600 whitespace-nowrap">
-                                  {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] text-slate-600 whitespace-nowrap">
+                                  {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </td>
-                                <td className="px-4 py-4 text-[13px] text-slate-700 font-semibold">
+                                <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] text-slate-700 font-semibold">
                                   {b.poNumber}
                                 </td>
-                                <td className="px-4 py-4 text-[13px] text-slate-600">
+                                <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] text-slate-600">
                                   <div className="font-medium">{b.locationName || '-'}</div>
-                                  {b.period && <div className="text-[11px] text-slate-400 mt-0.5">{b.period}</div>}
+                                  {b.period && <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">{b.period}</div>}
                                 </td>
-                                <td className="px-4 py-4 text-[13px] font-bold text-slate-700 whitespace-nowrap">
+                                <td className="px-4 py-3 sm:py-4 text-[12px] sm:text-[13px] font-bold text-slate-700 whitespace-nowrap">
                                   {formatRupiah(b.amount)}
                                 </td>
-                                <td className="px-4 py-4 text-[12px] font-bold text-center">
-                                  <span className={isBackdate ? 'text-amber-600' : 'text-[#2bb673]'}>{isBackdate ? 'Backdate' : 'Selesai'}</span>
+                                <td className="px-4 py-3 sm:py-4 text-[11px] sm:text-[12px] font-bold text-center">
+                                  <span className={isBackdate ? 'text-amber-600 bg-amber-50 px-2 py-1 rounded' : 'text-[#2bb673] bg-emerald-50 px-2 py-1 rounded'}>{isBackdate ? 'Backdate' : 'Selesai'}</span>
                                 </td>
-                                <td className="px-4 py-4 text-[13px] text-center">
-                                  <div className="flex items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
+                                <td className="px-4 py-3 sm:py-4 text-[13px] text-center">
+                                  <div className="flex items-center justify-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
                                     <button onClick={() => handleEditClick(b)} className="text-[#12649b] hover:text-blue-800" title="Edit"><Edit size={16}/></button>
                                     <button onClick={() => handleDeleteBill(b.id)} className="text-rose-500 hover:text-rose-700" title="Hapus"><Trash2 size={16}/></button>
                                   </div>
@@ -1990,7 +2014,7 @@ export default function App() {
                             <tr>
                               <td colSpan="7" className="p-8 text-center text-slate-500">
                                 <AlertTriangle size={32} className="mx-auto mb-2 opacity-30 text-amber-500" />
-                                <p className="text-[14px]">Data tagihan tidak ditemukan.</p>
+                                <p className="text-[13px] sm:text-[14px]">Data tagihan tidak ditemukan.</p>
                               </td>
                             </tr>
                           )}
@@ -2000,25 +2024,25 @@ export default function App() {
                   </div>
 
                   {filteredBills.length > 0 && (
-                    <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
-                      <div>
+                    <div className="flex flex-col sm:flex-row justify-between items-center text-[12px] sm:text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-xl shadow-sm gap-3 sm:gap-0">
+                      <div className="text-center sm:text-left">
                         Menampilkan <span className="font-bold">{indexOfFirstBill + 1}</span> hingga <span className="font-bold">{Math.min(indexOfLastBill, filteredBills.length)}</span> dari <span className="font-bold">{filteredBills.length}</span> entri
                       </div>
                       
-                      <div className="flex items-center gap-1 mt-3 sm:mt-0">
+                      <div className="flex items-center gap-1 w-full sm:w-auto justify-between sm:justify-start">
                         <button 
                           onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                           disabled={currentPage === 1}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          <ChevronLeft size={14} /> Sebelumnya
+                          <ChevronLeft size={14} /> <span className="hidden sm:inline">Sebelumnya</span>
                         </button>
                         <button 
                           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                           disabled={currentPage === totalPages}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          Selanjutnya <ChevronRight size={14} />
+                          <span className="hidden sm:inline">Selanjutnya</span> <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
@@ -2034,13 +2058,13 @@ export default function App() {
                     <div className="bg-[#e2e8f0] p-1.5 rounded-xl flex gap-1 shadow-inner">
                       <button 
                         onClick={() => setInputMode('manual')} 
-                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 ${inputMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 sm:px-5 py-2 rounded-lg text-[12px] sm:text-[13px] font-bold transition-all flex items-center gap-2 ${inputMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         Input Manual
                       </button>
                       <button 
                         onClick={() => setInputMode('excel')} 
-                        className={`px-5 py-2 rounded-lg text-[13px] font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 sm:px-5 py-2 rounded-lg text-[12px] sm:text-[13px] font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         <FileSpreadsheet size={16}/> Import Excel
                       </button>
@@ -2049,33 +2073,33 @@ export default function App() {
 
                   {/* MODE MANUAL PO */}
                   {inputMode === 'manual' ? (
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                        <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                    <div className="bg-white rounded-2xl sm:rounded-xl shadow-sm border border-slate-200 p-4 sm:p-10 mt-2">
+                      <div className="flex items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-slate-100">
+                        <h3 className="text-[18px] sm:text-[20px] font-bold text-slate-800 flex items-center gap-3">
                           Input PO Baru
                         </h3>
                       </div>
                       
                       <form onSubmit={handleSaveManualPO} className="space-y-6">
                         <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">Nomor Induk PO <span className="text-red-500">*</span></label>
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">Nomor Induk PO <span className="text-red-500">*</span></label>
                           <input 
                             type="text" 
                             required
                             value={manualForm.poNumber} 
                             onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
-                            className="w-full max-w-md px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                            className="w-full sm:max-w-md px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
                             placeholder="Contoh: 416xxxxxxx" 
                           />
                         </div>
                         
                         <div className="pt-4 border-t border-slate-100">
-                          <div className="flex justify-between items-center mb-4">
-                            <h4 className="font-bold text-slate-800 text-[14px]">Daftar Lokasi di bawah PO ini</h4>
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 sm:gap-0">
+                            <h4 className="font-bold text-slate-800 text-[13px] sm:text-[14px]">Daftar Lokasi di bawah PO ini</h4>
                             <button 
                               type="button"
                               onClick={handleAddLocationRow} 
-                              className="text-[13px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                              className="text-[12px] sm:text-[13px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                             >
                               <Plus size={16}/> Tambah Baris
                             </button>
@@ -2084,9 +2108,9 @@ export default function App() {
                           <div className="space-y-4">
                             {manualForm.locations.map((loc) => {
                                  return (
-                              <div key={loc.id} className="p-5 rounded-xl border border-slate-200 bg-slate-50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group shadow-sm">
+                              <div key={loc.id} className="p-4 sm:p-5 rounded-xl border border-slate-200 bg-slate-50 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-4 relative group shadow-sm">
                                 <div className="md:col-span-4">
-                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
+                                  <label className="block text-[11px] sm:text-[12px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
                                   <LocationAutocomplete 
                                     value={loc.name} 
                                     options={availableLocationNames} 
@@ -2094,7 +2118,7 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="md:col-span-3">
-                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Nilai PO (Rp) <span className="text-red-500">*</span></label>
+                                  <label className="block text-[11px] sm:text-[12px] font-bold text-slate-800 mb-2">Nilai PO (Rp) <span className="text-red-500">*</span></label>
                                   <input 
                                     type="text" 
                                     required
@@ -2105,7 +2129,7 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="md:col-span-2">
-                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Kuota (Bulan) <span className="text-red-500">*</span></label>
+                                  <label className="block text-[11px] sm:text-[12px] font-bold text-slate-800 mb-2">Kuota (Bulan) <span className="text-red-500">*</span></label>
                                   <input 
                                     type="number" 
                                     required
@@ -2115,7 +2139,7 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="md:col-span-3">
-                                   <label className="block text-[12px] font-bold text-slate-800 mb-2">Start Month</label>
+                                   <label className="block text-[11px] sm:text-[12px] font-bold text-slate-800 mb-2">Start Month</label>
                                    <input 
                                      type="month" 
                                      value={loc.startMonth} 
@@ -2127,7 +2151,7 @@ export default function App() {
                                   <button 
                                     type="button"
                                     onClick={() => handleRemoveLocationRow(loc.id)} 
-                                    className="absolute -top-3 -right-3 bg-white text-rose-500 border border-rose-200 rounded-full p-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                                    className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 bg-white text-rose-500 border border-rose-200 rounded-full p-1.5 shadow-md md:opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
                                   >
                                     <X size={14}/>
                                   </button>
@@ -2140,7 +2164,7 @@ export default function App() {
                         <div className="pt-6 flex justify-end">
                           <button 
                             type="submit" 
-                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
+                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[13px] sm:text-[14px] w-full sm:w-auto"
                           >
                             Simpan Data PO
                           </button>
@@ -2150,22 +2174,22 @@ export default function App() {
                   ) : (
                     
                     /* MODE EXCEL PO */
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2 space-y-6">
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                         <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-10 mt-2 space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between mb-4 sm:mb-8 pb-4 border-b border-slate-100 gap-3 sm:gap-0">
+                         <h3 className="text-[18px] sm:text-[20px] font-bold text-slate-800 flex items-center gap-3">
                            Unggah Excel Master PO
                          </h3>
                          <button 
                            onClick={handleDownloadTemplatePO} 
-                           className="text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                           className="text-[11px] sm:text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                          >
                            <Download size={14}/> Unduh Template
                          </button>
                       </div>
 
-                      <div className="border-2 border-dashed border-emerald-200 p-12 text-center relative rounded-xl bg-emerald-50/20">
+                      <div className="border-2 border-dashed border-emerald-200 p-8 sm:p-12 text-center relative rounded-xl bg-emerald-50/20">
                         <UploadCloud size={48} className="mx-auto text-emerald-500 mb-4 opacity-40" />
-                        <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
+                        <p className="text-[11px] sm:text-xs text-slate-400 mb-6 sm:mb-8 max-w-sm mx-auto leading-relaxed">
                            Tarik dan lepas file Excel Master PO Anda di sini, atau klik tombol di bawah untuk mencari file.
                         </p>
                         <div className="inline-block relative">
@@ -2176,44 +2200,44 @@ export default function App() {
                             onChange={handleFileUpload} 
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                           />
-                          <div className="bg-emerald-600 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm text-[13px]">
+                          <div className="bg-emerald-600 text-white px-6 sm:px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm text-[12px] sm:text-[13px]">
                             <FileSpreadsheet size={18}/> Pilih File Dokumen
                           </div>
                         </div>
                       </div>
                       
                       {excelPreview && (
-                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-                          <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-[13px]">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
-                            <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400 hover:text-rose-500">
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 mt-6">
+                          <div className="p-4 sm:p-5 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-[12px] sm:text-[13px]">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
+                            <button onClick={() => setExcelPreview(null)} className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-500 rounded-md hover:bg-slate-200 transition-colors">
                               <X size={18}/>
                             </button>
                           </div>
                           <div className="overflow-x-auto max-h-96 main-scroll">
-                            <table className="w-full text-left text-xs min-w-max">
+                            <table className="w-full text-left text-[11px] sm:text-xs min-w-max">
                               <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider sticky top-0 shadow-sm z-10">
                                 <tr>
-                                  <th className="px-6 py-4 border-r border-slate-200 last:border-0">No PO</th>
-                                  <th className="px-6 py-4 border-r border-slate-200 last:border-0">Daftar Lokasi & Nilai</th>
-                                  <th className="px-6 py-4">Kuota</th>
+                                  <th className="px-4 sm:px-6 py-3 sm:py-4 border-r border-slate-200 last:border-0">No PO</th>
+                                  <th className="px-4 sm:px-6 py-3 sm:py-4 border-r border-slate-200 last:border-0">Daftar Lokasi & Nilai</th>
+                                  <th className="px-4 sm:px-6 py-3 sm:py-4">Kuota</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y border-t border-slate-100">
                                 {excelPreview.map((p, i) => (
                                   <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                                    <td className="px-6 py-5 font-bold text-[#12649b] text-[13px] align-top">{p.poNumber}</td>
-                                    <td className="px-6 py-5 align-top">
+                                    <td className="px-4 sm:px-6 py-4 sm:py-5 font-bold text-[#12649b] text-[12px] sm:text-[13px] align-top">{p.poNumber}</td>
+                                    <td className="px-4 sm:px-6 py-4 sm:py-5 align-top">
                                       {p.locations.map((l, li) => (
                                         <div key={li} className="mb-2 last:mb-0">
-                                          <span className="font-semibold text-slate-700">{l.name}</span> 
-                                          <span className="text-slate-400 text-[11px] ml-2">({formatRupiah(l.value)})</span>
+                                          <span className="font-semibold text-slate-700 block sm:inline">{l.name}</span> 
+                                          <span className="text-slate-400 text-[10px] sm:text-[11px] sm:ml-2">({formatRupiah(l.value)})</span>
                                         </div>
                                       ))}
                                     </td>
-                                    <td className="px-6 py-5 align-top">
+                                    <td className="px-4 sm:px-6 py-4 sm:py-5 align-top">
                                       {p.locations.map((l, li) => (
-                                        <div key={li} className="mb-2 last:mb-0 font-semibold text-slate-500">
+                                        <div key={li} className="mb-2 last:mb-0 font-semibold text-slate-500 whitespace-nowrap">
                                           {l.totalQuota} Bln
                                         </div>
                                       ))}
@@ -2223,10 +2247,10 @@ export default function App() {
                               </tbody>
                             </table>
                           </div>
-                          <div className="p-6 bg-emerald-50 border-t flex justify-end">
+                          <div className="p-4 sm:p-6 bg-emerald-50 border-t flex justify-end">
                             <button 
                               onClick={handleSaveExcel} 
-                              className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-sm hover:bg-emerald-700 text-[13px]"
+                              className="bg-emerald-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg shadow-sm hover:bg-emerald-700 text-[12px] sm:text-[13px] w-full sm:w-auto"
                             >
                               Ya, Simpan {excelPreview.length} PO ke Cloud
                             </button>
@@ -2246,13 +2270,13 @@ export default function App() {
                     <div className="bg-[#e2e8f0] p-1.5 rounded-xl flex gap-1 shadow-inner">
                       <button 
                         onClick={() => setInputBillMode('manual')} 
-                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 ${inputBillMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 sm:px-5 py-2 rounded-lg text-[12px] sm:text-[13px] font-bold transition-all flex items-center gap-2 ${inputBillMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         Input Manual
                       </button>
                       <button 
                         onClick={() => setInputBillMode('excel')} 
-                        className={`px-5 py-2 rounded-lg text-[13px] font-bold flex items-center gap-2 transition-all ${inputBillMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 sm:px-5 py-2 rounded-lg text-[12px] sm:text-[13px] font-bold flex items-center gap-2 transition-all ${inputBillMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         <FileText size={16}/> Import Excel
                       </button>
@@ -2260,18 +2284,18 @@ export default function App() {
                   </div>
 
                   {inputBillMode === 'manual' ? (
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
+                    <div className="bg-white rounded-2xl sm:rounded-xl shadow-sm border border-slate-200 p-4 sm:p-10 mt-2">
                       
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                        <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                      <div className="flex items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-slate-100">
+                        <h3 className="text-[18px] sm:text-[20px] font-bold text-slate-800 flex items-center gap-3">
                           Input Tagihan Baru
                         </h3>
                       </div>
 
-                      <form onSubmit={handleSaveBill} className="space-y-6">
+                      <form onSubmit={handleSaveBill} className="space-y-4 sm:space-y-6">
                         
                         <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                             Region <span className="text-red-500">*</span>
                           </label>
                           <select 
@@ -2292,7 +2316,7 @@ export default function App() {
                         </div>
 
                         <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                             Master PO <span className="text-red-500">*</span>
                           </label>
                           <POAutocomplete 
@@ -2308,7 +2332,7 @@ export default function App() {
                         </div>
 
                         <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                             Lokasi / Peruntukan <span className="text-red-500">*</span>
                           </label>
                           <ObjectAutocomplete 
@@ -2330,7 +2354,7 @@ export default function App() {
 
                         {activeLocForBill?.generatedPeriods?.length > 0 && (
                           <div className="pt-2 animate-in fade-in duration-300">
-                            <label className="block text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
+                            <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
                               <span>Pilih Opsi Periode Tagihan <span className="text-red-500">*</span></span>
                               <span className="text-[#2a5ee8] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
                             </label>
@@ -2340,9 +2364,9 @@ export default function App() {
                                 return (
                                   <label 
                                     key={i} 
-                                    className={`cursor-pointer px-5 py-2.5 rounded-lg border text-[13px] transition-all
+                                    className={`cursor-pointer px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border text-[11px] sm:text-[13px] transition-all flex-1 sm:flex-none text-center
                                       ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
-                                      billForm.selectedPeriod === p ? 'bg-[#12649b] text-white border-[#12649b] font-bold shadow-md transform scale-105' : 
+                                      billForm.selectedPeriod === p ? 'bg-[#12649b] text-white border-[#12649b] font-bold shadow-md transform sm:scale-105' : 
                                       'bg-white text-slate-700 border-slate-300 hover:border-[#12649b] hover:bg-blue-50 font-semibold'}
                                     `}
                                   >
@@ -2370,8 +2394,8 @@ export default function App() {
                               <div className="mt-2 p-4 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
                                 <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
                                 <div>
-                                  <h5 className="text-[13px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
-                                  <p className="text-[13px] text-rose-600 mt-1 leading-relaxed">
+                                  <h5 className="text-[12px] sm:text-[13px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
+                                  <p className="text-[11px] sm:text-[13px] text-rose-600 mt-1 leading-relaxed">
                                     Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
                                   </p>
                                 </div>
@@ -2382,7 +2406,7 @@ export default function App() {
                         })()}
                         
                         <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                          <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                             Judul / Uraian Tagihan <span className="text-red-500">*</span>
                           </label>
                           <input 
@@ -2395,9 +2419,9 @@ export default function App() {
                           />
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                           <div>
-                             <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                             <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                                No. BAST <span className="text-red-500">*</span>
                              </label>
                              <input 
@@ -2410,7 +2434,7 @@ export default function App() {
                              />
                           </div>
                           <div>
-                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                               Tanggal Invoice <span className="text-red-500">*</span>
                             </label>
                             <input 
@@ -2422,7 +2446,7 @@ export default function App() {
                             />
                           </div>
                           <div className="md:col-span-2">
-                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            <label className="block text-[12px] sm:text-[13px] font-bold text-slate-800 mb-2">
                               Nominal (Rp) <span className="text-red-500">*</span>
                             </label>
                             <input 
@@ -2436,10 +2460,10 @@ export default function App() {
                           </div>
                         </div>
                         
-                        <div className="pt-6 flex justify-end">
+                        <div className="pt-4 sm:pt-6 flex justify-end">
                           <button 
                             type="submit" 
-                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
+                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[13px] sm:text-[14px] w-full sm:w-auto"
                           >
                             Simpan
                           </button>
@@ -2448,23 +2472,23 @@ export default function App() {
                     </div>
                   ) : (
                     /* MODE EXCEL TAGIHAN */
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2 space-y-6">
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                         <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-10 mt-2 space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between mb-4 sm:mb-8 pb-4 border-b border-slate-100 gap-3 sm:gap-0">
+                         <h3 className="text-[18px] sm:text-[20px] font-bold text-slate-800 flex items-center gap-3">
                            Unggah Excel Data Tagihan
                          </h3>
                          <button 
                            onClick={handleDownloadTemplateBill} 
-                           className="text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                           className="text-[11px] sm:text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                          >
                            <Download size={14}/> Unduh Template
                          </button>
                       </div>
 
-                      <div className="border-2 border-dashed border-blue-200 p-12 text-center relative rounded-xl bg-blue-50/20">
+                      <div className="border-2 border-dashed border-blue-200 p-8 sm:p-12 text-center relative rounded-xl bg-blue-50/20">
                         <UploadCloud size={48} className="mx-auto text-blue-500 mb-4 opacity-40" />
-                        <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
-                           Tarik dan lepas file Excel Tagihan Anda di sini, atau klik tombol di bawah untuk mencari file.
+                        <p className="text-[11px] sm:text-xs text-slate-400 mb-6 sm:mb-8 max-w-sm mx-auto leading-relaxed">
+                           Tarik dan lepas file Excel Tagihan Anda di sini, atau klik tombol di bawah untuk mencari file. Sistem akan memvalidasi kuota secara otomatis.
                         </p>
                         <div className="inline-block relative">
                           <input 
@@ -2474,53 +2498,53 @@ export default function App() {
                             onChange={handleFileBillUpload} 
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                           />
-                          <div className="bg-[#12649b] text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-800 transition-colors shadow-sm text-[13px]">
+                          <div className="bg-[#12649b] text-white px-6 sm:px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-800 transition-colors shadow-sm text-[12px] sm:text-[13px]">
                             <FileSpreadsheet size={18}/> Pilih File Tagihan
                           </div>
                         </div>
                       </div>
                       
                       {excelBillPreview && (
-                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-                          <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-[13px]">Preview Data Excel ({excelBillPreview.length} Baris Dibaca)</h3>
-                            <button onClick={() => setExcelBillPreview(null)} className="p-2 text-slate-400 hover:text-rose-500">
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 mt-6">
+                          <div className="p-4 sm:p-5 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-[12px] sm:text-[13px]">Preview Data Excel ({excelBillPreview.length} Baris Dibaca)</h3>
+                            <button onClick={() => setExcelBillPreview(null)} className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-500 rounded-md hover:bg-slate-200 transition-colors">
                               <X size={18}/>
                             </button>
                           </div>
                           <div className="overflow-x-auto max-h-96 main-scroll">
-                            <table className="w-full text-left text-xs min-w-max">
+                            <table className="w-full text-left text-[11px] sm:text-xs min-w-max">
                               <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider sticky top-0 shadow-sm z-10">
                                 <tr>
-                                  <th className="px-4 py-3 border-r border-slate-200 text-center w-10">Valid</th>
-                                  <th className="px-4 py-3 border-r border-slate-200">Uraian Tagihan</th>
-                                  <th className="px-4 py-3 border-r border-slate-200">Keterangan PO</th>
-                                  <th className="px-4 py-3 border-r border-slate-200">Nominal</th>
-                                  <th className="px-4 py-3">Pesan Sistem</th>
+                                  <th className="px-4 sm:px-4 py-3 border-r border-slate-200 text-center w-10">Valid</th>
+                                  <th className="px-4 sm:px-4 py-3 border-r border-slate-200">Uraian Tagihan</th>
+                                  <th className="px-4 sm:px-4 py-3 border-r border-slate-200">Keterangan PO</th>
+                                  <th className="px-4 sm:px-4 py-3 border-r border-slate-200">Nominal</th>
+                                  <th className="px-4 sm:px-4 py-3">Pesan Sistem</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y border-t border-slate-100">
                                 {excelBillPreview.map((b) => (
                                   <tr key={b.id} className={`transition-colors ${b.isValid ? 'hover:bg-blue-50/20' : 'bg-rose-50/30'}`}>
-                                    <td className="px-4 py-4 text-center align-top">
+                                    <td className="px-4 py-3 sm:py-4 text-center align-top">
                                       {b.isValid ? <CheckCircle size={16} className="text-emerald-500 mx-auto"/> : <AlertTriangle size={16} className="text-rose-500 mx-auto"/>}
                                     </td>
-                                    <td className="px-4 py-4 align-top">
-                                      <div className="font-bold text-[#12649b] text-[13px]">{b.title}</div>
-                                      <div className="text-slate-400 text-[11px] mt-1">{new Date(b.date).toLocaleDateString('id-ID')} | BAST: {b.noBast}</div>
+                                    <td className="px-4 py-3 sm:py-4 align-top">
+                                      <div className="font-bold text-[#12649b] text-[12px] sm:text-[13px]">{b.title}</div>
+                                      <div className="text-slate-400 text-[10px] sm:text-[11px] mt-1">{new Date(b.date).toLocaleDateString('id-ID')} | BAST: {b.noBast}</div>
                                     </td>
-                                    <td className="px-4 py-4 align-top">
-                                      <div className="font-semibold text-slate-700 text-[12px]">{b.poNumber}</div>
-                                      <div className="text-slate-500 text-[11px] mt-0.5">{b.region} - {b.locationName}</div>
+                                    <td className="px-4 py-3 sm:py-4 align-top">
+                                      <div className="font-semibold text-slate-700 text-[11px] sm:text-[12px]">{b.poNumber}</div>
+                                      <div className="text-slate-500 text-[10px] sm:text-[11px] mt-0.5">{b.region} - {b.locationName}</div>
                                     </td>
-                                    <td className="px-4 py-4 align-top font-bold text-slate-700 whitespace-nowrap">
+                                    <td className="px-4 py-3 sm:py-4 align-top font-bold text-slate-700 whitespace-nowrap">
                                       {formatRupiah(b.amount)}
                                     </td>
-                                    <td className="px-4 py-4 align-top">
+                                    <td className="px-4 py-3 sm:py-4 align-top">
                                       {b.isValid ? (
-                                        <span className="text-emerald-600 font-semibold text-[11px]">Siap Diimpor</span>
+                                        <span className="text-emerald-600 font-semibold text-[10px] sm:text-[11px]">Siap Diimpor</span>
                                       ) : (
-                                        <span className="text-rose-600 font-bold text-[11px]">{b.errorMsg}</span>
+                                        <span className="text-rose-600 font-bold text-[10px] sm:text-[11px]">{b.errorMsg}</span>
                                       )}
                                     </td>
                                   </tr>
@@ -2528,13 +2552,13 @@ export default function App() {
                               </tbody>
                             </table>
                           </div>
-                          <div className="p-6 bg-blue-50 border-t flex items-center justify-between">
-                            <div className="text-[12px] text-slate-600">
+                          <div className="p-4 sm:p-6 bg-blue-50 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                            <div className="text-[11px] sm:text-[12px] text-slate-600">
                                Hanya baris dengan status <strong className="text-emerald-600">Valid</strong> yang akan dimasukkan ke database.
                             </div>
                             <button 
                               onClick={handleSaveExcelBill} 
-                              className="bg-[#12649b] text-white font-bold py-3 px-8 rounded-lg shadow-sm hover:bg-blue-800 text-[13px] disabled:opacity-50"
+                              className="bg-[#12649b] text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-lg shadow-sm hover:bg-blue-800 text-[12px] sm:text-[13px] disabled:opacity-50 w-full sm:w-auto"
                               disabled={!excelBillPreview.some(b => b.isValid)}
                             >
                               Simpan Tagihan Valid
@@ -2553,7 +2577,7 @@ export default function App() {
       </div>
 
       {/* FOOTER HIJAU */}
-      <footer className="bg-[#8cc63f] text-white text-center text-[11px] py-3 font-semibold z-30 shadow-inner tracking-wider">
+      <footer className="bg-[#8cc63f] text-white text-center text-[10px] sm:text-[11px] py-2 sm:py-3 font-semibold z-30 shadow-inner tracking-wider">
         ©{currentYear} PT. Elnusa Petrofin
       </footer>
     </div>
