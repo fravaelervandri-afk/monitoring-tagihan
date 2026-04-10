@@ -70,9 +70,19 @@ export default function App() {
   // State untuk Accordion Menu di Sidebar
   const [sidebarMenu, setSidebarMenu] = useState({ po: true, tagihan: true });
 
+  // State Target Tindak Lanjut
+  const [followUpTarget, setFollowUpTarget] = useState(null);
+
   const toggleSidebarMenu = (menu) => {
     setSidebarMenu(prev => ({ ...prev, [menu]: !prev[menu] }));
   };
+
+  // Bersihkan target tindak lanjut jika user batal (pindah halaman)
+  useEffect(() => {
+    if (activeTab !== 'tab-input-po') {
+      setFollowUpTarget(null);
+    }
+  }, [activeTab]);
 
   // State utama data dari Database
   const [pos, setPos] = useState([]);
@@ -346,7 +356,8 @@ export default function App() {
           endMonth: l.endMonth || '',
           periodDesc: l.periodDesc || '',
           usedQuota: 0,
-          generatedPeriods: generatedPeriods 
+          generatedPeriods: generatedPeriods,
+          isResolvedWarning: false
       };
     });
 
@@ -364,11 +375,33 @@ export default function App() {
       return showNotif('Gagal menyimpan PO: ' + error.message, 'error');
     }
 
+    let currentPosList = [...pos];
+
+    // JIKA INI HASIL TINDAK LANJUT YANG SUKSES DISIMPAN, SELESAIKAN STATUS PO LAMANYA
+    if (followUpTarget) {
+       const poIndex = currentPosList.findIndex(p => p.poNumber === followUpTarget.poNumber);
+       if (poIndex > -1) {
+          const updatedLocs = currentPosList[poIndex].locations.map(l => 
+            l.id === followUpTarget.locationId ? { ...l, isResolvedWarning: true } : l
+          );
+          
+          const { error: updateErr } = await supabase
+            .from('pos')
+            .update({ locations: updatedLocs })
+            .eq('po_number', followUpTarget.poNumber);
+            
+          if (!updateErr) {
+             currentPosList[poIndex] = { ...currentPosList[poIndex], locations: updatedLocs };
+          }
+       }
+       setFollowUpTarget(null); // Selesaikan tindak lanjut karena berhasil disimpan
+    }
+
     setPos([{ 
         idDB: data[0].id, 
         poNumber: data[0].po_number, 
         locations: data[0].locations 
-    }, ...pos]);
+    }, ...currentPosList]);
     
     setManualForm({ 
         poNumber: '', 
@@ -464,7 +497,8 @@ export default function App() {
             startMonth: start,
             endMonth: end,
             periodDesc: desc,
-            generatedPeriods: generatedPeriods
+            generatedPeriods: generatedPeriods,
+            isResolvedWarning: false
           });
         });
 
@@ -572,7 +606,10 @@ export default function App() {
     const estimatedMonthly = loc.totalQuota > 0 ? loc.value / loc.totalQuota : 0;
     const remainingQuota = loc.totalQuota - loc.usedQuota;
     
-    const isShortageWarning = remainingQuota === 1 && remainingValue < estimatedMonthly;
+    // PERINGATAN HANYA MUNCUL JIKA BELUM DITINDAKLANJUTI DENGAN SUKSES (isResolvedWarning === false)
+    // Jika tidak ada data loc.isResolvedWarning (dari data lama), otomatis dianggap false sehingga tetap muncul
+    const isShortageWarning = remainingQuota === 1 && remainingValue < estimatedMonthly && !loc.isResolvedWarning;
+    
     return { 
         totalBilled, 
         remainingValue, 
@@ -1138,37 +1175,66 @@ export default function App() {
   const poKritis = [];
   pos.forEach(p => {
     p.locations.forEach(loc => {
-      // Perhitungan khusus untuk mengakomodasi region trik
       const locationBills = bills.filter(b => b.poNumber === p.poNumber && (b.locationName || '').includes(loc.name));
       const totalBilled = locationBills.reduce((sum, b) => sum + b.amount, 0);
       const remainingValue = loc.value - totalBilled;
       const estimatedMonthly = loc.totalQuota > 0 ? loc.value / loc.totalQuota : 0;
       const remainingQuota = loc.totalQuota - loc.usedQuota;
       
-      const isShortageWarning = remainingQuota === 1 && remainingValue < estimatedMonthly;
+      // HANYA jika nilainya kurang DAN belum diselesaikan/ditindaklanjuti dengan sukses (isResolvedWarning === false)
+      const isShortageWarning = remainingQuota === 1 && remainingValue < estimatedMonthly && !loc.isResolvedWarning;
       
-      // HANYA masukkan jika isShortageWarning bernilai true (Nilai PO Kurang)
       if (isShortageWarning) {
         poKritis.push({ poIdDB: p.idDB, poNumber: p.poNumber, location: loc, stats: { remainingValue, totalBilled, isShortageWarning } });
       }
     });
   });
 
-  // Mengurutkan agar peringatan "Potensi PO Additional!" selalu berada di paling atas
+  // Mengurutkan agar peringatan paling atas
   poKritis.sort((a, b) => (b.stats.isShortageWarning ? 1 : 0) - (a.stats.isShortageWarning ? 1 : 0));
 
-  // Notifikasi yang belum dibaca
+  // Notifikasi yang belum dibaca (dismiss sementara, beda dengan ditindaklanjuti/resolved)
   const unreadPoKritis = poKritis.filter(pk => !readNotifs.includes(`${pk.poNumber}-${pk.location.id}`));
 
   const tagihanTerakhir = [...bills].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
-  // Aksi ketika notifikasi di-klik (menandai read & direct)
+  // AKSI TINDAK LANJUT (Menyiapkan Form Input PO Additional)
+  const handleTindakLanjut = async (pk) => {
+    // 1. Simpan target tindak lanjut ke state (JANGAN update DB dulu)
+    setFollowUpTarget({ poNumber: pk.poNumber, locationId: pk.location.id });
+
+    // 2. Redirect ke form Input PO Baru & Pre-fill data
+    setActiveTab('tab-input-po');
+    setSidebarMenu(prev => ({ ...prev, po: true }));
+    setInputMode('manual');
+    setIsNotifOpen(false); // Tutup dropdown notif jika terbuka
+    
+    // 3. Siapkan form dengan lokasi yang perlu ditambahkan PO
+    setManualForm({
+      poNumber: '', // Kosong agar diisi No PO Additional yang baru
+      locations: [{ 
+          id: `L-${Date.now()}`, 
+          name: pk.location.name, // Auto-fill lokasi yang bermasalah
+          value: '', 
+          totalQuota: '', 
+          startMonth: '', 
+          endMonth: '', 
+          periodDesc: '', 
+          billingType: 'partial', 
+          jenisTagihan: pk.location.jenisTagihan || '', 
+          showDetails: false 
+      }]
+    });
+    
+    showNotif(`Silakan input PO Additional untuk lokasi ${pk.location.name}.`, 'success');
+  };
+
+  // Aksi ketika baris notifikasi di-klik biasa (hanya melihat)
   const handleNotifClick = (pk) => {
     const notifId = `${pk.poNumber}-${pk.location.id}`;
     if (!readNotifs.includes(notifId)) {
       setReadNotifs([...readNotifs, notifId]);
     }
-    
     setSearchPOQuery(pk.poNumber);
     setExpandedPOs(prev => ({ ...prev, [pk.poIdDB]: true }));
     setActiveTab('tab-master-po');
@@ -1443,17 +1509,25 @@ export default function App() {
                           {unreadPoKritis.map((pk, idx) => (
                             <div 
                               key={idx} 
+                              className="p-4 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-start gap-3 border-b border-slate-50 last:border-0"
                               onClick={() => handleNotifClick(pk)}
-                              className="p-4 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-start gap-3"
                             >
                               <div className="mt-0.5 bg-rose-100 p-1.5 rounded-full text-rose-500">
                                 <AlertTriangle size={14} />
                               </div>
-                              <div>
-                                <p className="text-[13px] font-bold text-slate-800">{pk.poNumber}</p>
-                                <p className="text-[12px] text-slate-500 mt-0.5 leading-snug">
-                                  Lokasi <span className="font-semibold text-slate-700">{pk.location.name}</span> butuh atensi. Potensi nilai PO kurang!
-                                </p>
+                              <div className="flex-1">
+                                <p className="text-[13px] font-bold text-slate-800 hover:text-blue-600 transition-colors">{pk.poNumber}</p>
+                                <div className="flex justify-between items-end mt-1">
+                                  <p className="text-[11px] text-slate-500 leading-snug pr-2">
+                                    Lokasi <span className="font-semibold text-slate-700">{pk.location.name}</span> butuh atensi.
+                                  </p>
+                                  <button 
+                                     onClick={(e) => { e.stopPropagation(); handleTindakLanjut(pk); }}
+                                     className="text-[10px] font-bold bg-[#12649b] text-white px-2 py-1 rounded shadow-sm hover:bg-blue-800 transition-colors whitespace-nowrap"
+                                  >
+                                     Tindak Lanjut
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1557,20 +1631,28 @@ export default function App() {
                         </h3>
                         <div className="space-y-3 flex-1">
                            {poKritis.length > 0 ? poKritis.slice(0, 4).map((pk, idx) => (
-                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer hover:border-amber-200 hover:shadow-sm transition-all" onClick={() => handleNotifClick(pk)}>
-                                 <div className="overflow-hidden pr-2">
-                                    <div className="font-bold text-slate-800 text-[13px] mb-1 truncate">{pk.poNumber}</div>
+                              <div key={idx} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex justify-between items-center hover:border-amber-200 hover:shadow-sm transition-all">
+                                 <div className="overflow-hidden pr-2 flex-1 cursor-pointer" onClick={() => handleNotifClick(pk)}>
+                                    <div className="font-bold text-slate-800 text-[13px] mb-1 truncate hover:text-blue-600 transition-colors">{pk.poNumber}</div>
                                     <div className="text-[12px] text-slate-500 truncate">{pk.location.name}</div>
                                     {pk.stats.isShortageWarning && (
-                                        <div className="inline-flex items-center gap-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md font-bold mt-2">
-                                            <AlertTriangle size={10} /> Potensi PO Additional!
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="inline-flex items-center gap-1 text-[10px] text-rose-600 font-bold">
+                                                <AlertTriangle size={10} /> Potensi Nilai Kurang!
+                                            </span>
                                         </div>
                                     )}
                                  </div>
-                                 <div className="text-right whitespace-nowrap">
+                                 <div className="flex flex-col items-end gap-2 whitespace-nowrap ml-2">
                                     <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
                                       Sisa {pk.location.totalQuota - pk.location.usedQuota}x Tagih
                                     </div>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleTindakLanjut(pk); }}
+                                      className="text-[10px] font-bold bg-rose-500 text-white px-3 py-1.5 rounded shadow-sm hover:bg-rose-600 transition-colors"
+                                    >
+                                      Tindak Lanjut
+                                    </button>
                                  </div>
                               </div>
                            )) : (
@@ -1730,9 +1812,16 @@ export default function App() {
                                                     style={{ width: `${Math.min(locProgress, 100)}%` }}
                                                   ></div>
                                                 </div>
-                                                <div className="flex justify-between">
+                                                <div className="flex justify-between items-center mt-3">
                                                     <div className="text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
-                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
+                                                    {s.isShortageWarning && (
+                                                      <button 
+                                                        onClick={() => handleTindakLanjut({ poIdDB: p.idDB, poNumber: p.poNumber, location: l, stats: s })}
+                                                        className="text-[10px] font-bold bg-rose-500 text-white px-2 py-1 rounded shadow-sm hover:bg-rose-600 transition-colors flex items-center gap-1"
+                                                      >
+                                                        <AlertTriangle size={10}/> Tindak Lanjut
+                                                      </button>
+                                                    )}
                                                 </div>
                                               </div>
                                             )
@@ -1993,7 +2082,8 @@ export default function App() {
                           </div>
                           
                           <div className="space-y-4">
-                            {manualForm.locations.map((loc) => (
+                            {manualForm.locations.map((loc) => {
+                                 return (
                               <div key={loc.id} className="p-5 rounded-xl border border-slate-200 bg-slate-50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group shadow-sm">
                                 <div className="md:col-span-4">
                                   <label className="block text-[12px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
@@ -2043,7 +2133,7 @@ export default function App() {
                                   </button>
                                 )}
                               </div>
-                            ))}
+                            )})}
                           </div>
                         </div>
                         
@@ -2188,7 +2278,7 @@ export default function App() {
                             required
                             value={billForm.region}
                             onChange={e => setBillForm({...billForm, region: e.target.value})}
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:border-[#12649b] text-[13px] bg-white appearance-none cursor-pointer"
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#2a5ee8] focus:ring-1 focus:ring-[#2a5ee8] text-[13px] bg-white appearance-none cursor-pointer"
                             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 9l4-4 4 4m0 6l-4 4-4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em` }}
                           >
                             <option value="" disabled>Pilih Region</option>
@@ -2242,7 +2332,7 @@ export default function App() {
                           <div className="pt-2 animate-in fade-in duration-300">
                             <label className="block text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
                               <span>Pilih Opsi Periode Tagihan <span className="text-red-500">*</span></span>
-                              <span className="text-[#12649b] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
+                              <span className="text-[#2a5ee8] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
                             </label>
                             <div className="flex flex-wrap gap-2.5">
                               {activeLocForBill.generatedPeriods.map((p, i) => {
@@ -2300,7 +2390,7 @@ export default function App() {
                             required
                             value={billForm.title} 
                             onChange={e => setBillForm({...billForm, title: e.target.value})} 
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#2a5ee8] focus:ring-1 focus:ring-[#2a5ee8] text-[13px]" 
                             placeholder="Deskripsikan Uraian Tagihan..." 
                           />
                         </div>
@@ -2315,7 +2405,7 @@ export default function App() {
                                required
                                value={billForm.noBast} 
                                onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
-                               className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                               className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#2a5ee8] focus:ring-1 focus:ring-[#2a5ee8] text-[13px]" 
                                placeholder="BAST-..." 
                              />
                           </div>
@@ -2328,7 +2418,7 @@ export default function App() {
                               required
                               value={billForm.date} 
                               onChange={e => setBillForm({...billForm, date: e.target.value})} 
-                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] text-slate-700" 
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#2a5ee8] focus:ring-1 focus:ring-[#2a5ee8] text-[13px] text-slate-700" 
                             />
                           </div>
                           <div className="md:col-span-2">
@@ -2340,7 +2430,7 @@ export default function App() {
                               required
                               value={billForm.amount} 
                               onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
-                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[15px] font-bold text-slate-800" 
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#2a5ee8] focus:ring-1 focus:ring-[#2a5ee8] text-[15px] font-bold text-slate-800" 
                               placeholder="0"
                             />
                           </div>
