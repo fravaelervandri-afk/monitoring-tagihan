@@ -7,15 +7,52 @@ import {
   Monitor, Home, CalendarClock, History, Database,
   FileText, FilePlus, FileEdit, Clock, AlertTriangle, 
   CheckCircle, Trash2, Plus, UploadCloud, FileSpreadsheet, Save, X, Search,
-  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, User
+  Edit, Download, Filter, MapPin, Bell, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, User, Check
 } from 'lucide-react';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-// --- KONFIGURASI SUPABASE ---
+// --- PENGATURAN SUPABASE ---
 const supabaseUrl = 'https://ggqhftplowteewzlzimu.supabase.co';
 const supabaseKey = 'sb_publishable_O7S-yT9cFZiMWSLAOjSqoQ_uOtd8C3x';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- ALGORITMA SMART PARSER EXCEL (Membaca segala jenis format Rupiah) ---
+const parseExcelNumber = (val) => {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  
+  // Ubah ke huruf besar dan hilangkan simbol mata uang, spasi
+  let str = String(val).toUpperCase().replace(/RP|\s/g, ''); 
+  
+  const lastDot = str.lastIndexOf('.');
+  const lastComma = str.lastIndexOf(',');
+  
+  if (lastComma > lastDot && lastDot > -1) {
+      // Format Indonesia: 1.500.000,00
+      str = str.replace(/\./g, '').replace(',', '.');
+  } else if (lastDot > lastComma && lastComma > -1) {
+      // Format Internasional: 1,500,000.00
+      str = str.replace(/,/g, '');
+  } else if (lastComma > -1) {
+      // Hanya ada koma (misal: 1,500,000 atau 1500000,50)
+      if (str.length - lastComma - 1 <= 2) { 
+          str = str.replace(',', '.'); // Berfungsi sebagai desimal
+      } else { 
+          str = str.replace(/,/g, ''); // Berfungsi sebagai pemisah ribuan
+      }
+  } else if (lastDot > -1) {
+      // Hanya ada titik (misal: 1.500.000 atau 1500000.50)
+      if (str.length - lastDot - 1 <= 2) { 
+          // Biarkan sebagai desimal
+      } else { 
+          str = str.replace(/\./g, ''); // Berfungsi sebagai pemisah ribuan
+      }
+  }
+  
+  // Ambil hanya angka, minus, dan titik desimal
+  return parseFloat(str.replace(/[^0-9.-]/g, '')) || 0;
+};
 
 export default function App() {
   const currentYear = new Date().getFullYear();
@@ -25,7 +62,7 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
 
-  // State untuk Notifikasi Lonceng & Status Read
+  // State untuk Notifikasi Lonceng & Status Baca
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [readNotifs, setReadNotifs] = useState([]);
   const notifRef = useRef(null);
@@ -54,7 +91,7 @@ export default function App() {
     }));
   };
 
-  // Handle klik di luar notifikasi untuk menutup dropdown
+  // Menutup dropdown notifikasi jika klik di luar area
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
@@ -65,7 +102,7 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Ambil daftar nama lokasi unik yang pernah diinput untuk saran (Autocomplete)
+  // Ambil daftar nama lokasi unik untuk Autocomplete
   const availableLocationNames = useMemo(() => {
     const names = new Set();
     pos.forEach(p => {
@@ -78,14 +115,14 @@ export default function App() {
     return Array.from(names);
   }, [pos]);
 
-  // Filter khusus Master PO (Hanya memunculkan data saat di-search)
+  // Saringan Master PO
   const filteredPOs = useMemo(() => {
-    if (!searchPOQuery.trim()) return pos; // Tampilkan semua PO jika tidak ada pencarian
+    if (!searchPOQuery.trim()) return pos; 
     return pos.filter(p => p.poNumber.toLowerCase().includes(searchPOQuery.toLowerCase()));
   }, [pos, searchPOQuery]);
 
   // ==========================================
-  // FETCH DATA DARI SUPABASE
+  // AMBIL DATA DARI SUPABASE
   // ==========================================
   useEffect(() => {
     fetchData();
@@ -352,7 +389,7 @@ export default function App() {
     showNotif('PO Baru Berhasil Disimpan ke Supabase!', 'success');
   };
 
-  // State Excel Import
+  // State Excel Import PO
   const fileInputRef = useRef(null);
   const [excelPreview, setExcelPreview] = useState(null);
 
@@ -392,8 +429,9 @@ export default function App() {
 
           const locName = row['LOKASI'] || row['Lokasi'] || 'Tanpa Nama';
           const rawValue = row['ESTIMASI'] || row['Nilai PO perlokasi'] || row['Nilai PO'];
-          const cleanValue = rawValue ? String(rawValue).replace(/[^0-9]/g, '') : '0';
-          const locValue = parseFloat(cleanValue);
+          
+          // Menggunakan Smart Parser
+          const locValue = parseExcelNumber(rawValue);
 
           const duration = row['MONTH'] || row['Month'] || row['jumlah bulan dalam bentuk angka'] || row['Jumlah Bulan'];
           const finalQuota = parseInt(duration) || 1;
@@ -477,11 +515,41 @@ export default function App() {
     showNotif(`${excelPreview.length} PO Berhasil Diimpor ke Supabase!`, 'success');
   };
 
+  const handleDownloadTemplatePO = async () => {
+    if (!window.XLSX) {
+      try {
+        const module = await import('https://esm.sh/xlsx');
+        window.XLSX = module.default || module;
+      } catch (err) {
+        return showNotif('Gagal memuat modul pembuat Excel.', 'error');
+      }
+    }
+    
+    const templateData = [{
+      'No PO': '4160123456',
+      'Lokasi': 'LPG Amurang',
+      'Nilai PO': 15000000,
+      'Jumlah Bulan': 12,
+      'Start Month': '2026-01',
+      'End Month': '2026-12',
+      'Keterangan': 'Contoh Keterangan Periode',
+      'Jenis Tagihan': 'Sewa Alat'
+    }];
+
+    const ws = window.XLSX.utils.json_to_sheet(templateData);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Template_Master_PO");
+    window.XLSX.writeFile(wb, `Template_Input_PO_Elnusa.xlsx`);
+  };
+
   // ==========================================
-  // LOGIKA INPUT TAGIHAN BARU 
+  // LOGIKA INPUT TAGIHAN BARU & EXCEL IMPORT
   // ==========================================
+  const [inputBillMode, setInputBillMode] = useState('manual');
+  const fileBillInputRef = useRef(null);
+  const [excelBillPreview, setExcelBillPreview] = useState(null);
+
   const [billForm, setBillForm] = useState({
-    hasPo: true,
     region: '',
     poNumber: '',
     locationId: '',
@@ -497,8 +565,7 @@ export default function App() {
 
   const getLocationStats = (loc, poNum) => {
     const locationBills = bills.filter(b => {
-       // Extract ID comparison safely since locationName is now mutated
-       return b.hasPo && b.poNumber === poNum && b.locationName.includes(loc.name);
+       return b.poNumber === poNum && b.locationName.includes(loc.name);
     });
     const totalBilled = locationBills.reduce((sum, b) => sum + b.amount, 0);
     const remainingValue = loc.value - totalBilled;
@@ -522,8 +589,8 @@ export default function App() {
       return showNotif('Silakan pilih Region!', 'error');
     }
     
-    if (!billForm.title || !billForm.noBast || !billForm.amount || !billForm.date) {
-      return showNotif('Lengkapi data tagihan (Judul, No. BAST, Nilai, Tanggal)!', 'error');
+    if (!billForm.title || !billForm.noBast || !billForm.amount || !billForm.date || !billForm.poNumber || !billForm.locationId) {
+      return showNotif('Lengkapi data tagihan (Judul, No. BAST, Nilai, Tanggal, PO, Lokasi)!', 'error');
     }
     
     const cleanAmount = parseFloat(String(billForm.amount).replace(/[^0-9]/g, '')) || 0;
@@ -531,57 +598,49 @@ export default function App() {
         return showNotif('Nominal tagihan tidak valid!', 'error');
     }
 
-    let iteration = null;
-    let updatedLocsForState = null;
-
-    if (billForm.hasPo) {
-      if (!billForm.poNumber || !billForm.locationId) {
-          return showNotif('Pilih Master PO dan Lokasi terlebih dahulu!', 'error');
-      }
-      if (!activeLocForBill) {
-          return showNotif('Lokasi tidak valid', 'error');
-      }
-      if (activeLocForBill.usedQuota >= activeLocForBill.totalQuota) {
-          return showNotif('Gagal: Kuota Master PO untuk lokasi ini sudah penuh!', 'error');
-      }
-      if (activeLocForBill.generatedPeriods?.length > 0 && !billForm.selectedPeriod) {
-          return showNotif('Pilih Periode Tagihan yang sesuai!', 'error');
-      }
-
-      updatedLocsForState = activePoForBill.locations.map(l => {
-        if (String(l.id) === String(billForm.locationId)) {
-          return { ...l, usedQuota: l.usedQuota + 1 };
-        }
-        return l;
-      });
-
-      const { error: updatePoErr } = await supabase
-        .from('pos')
-        .update({ locations: updatedLocsForState })
-        .eq('po_number', billForm.poNumber);
-
-      if (updatePoErr) {
-          return showNotif('Gagal memotong kuota PO: ' + updatePoErr.message, 'error');
-      }
-      
-      iteration = activeLocForBill.usedQuota + 1; 
+    if (!activeLocForBill) {
+        return showNotif('Lokasi tidak valid', 'error');
+    }
+    
+    if (activeLocForBill.usedQuota >= activeLocForBill.totalQuota) {
+        return showNotif('Gagal: Kuota Master PO untuk lokasi ini sudah penuh!', 'error');
+    }
+    
+    if (activeLocForBill.generatedPeriods?.length > 0 && !billForm.selectedPeriod) {
+        return showNotif('Pilih Periode Tagihan yang sesuai!', 'error');
     }
 
-    // TRICK DATABASE: Menyisipkan Region ke dalam string location_name
-    const finalLocationName = billForm.hasPo && activeLocForBill 
-        ? `${billForm.region} | ${activeLocForBill.name}` 
-        : billForm.region;
+    const updatedLocsForState = activePoForBill.locations.map(l => {
+      if (String(l.id) === String(billForm.locationId)) {
+        return { ...l, usedQuota: l.usedQuota + 1 };
+      }
+      return l;
+    });
+
+    const { error: updatePoErr } = await supabase
+      .from('pos')
+      .update({ locations: updatedLocsForState })
+      .eq('po_number', billForm.poNumber);
+
+    if (updatePoErr) {
+        return showNotif('Gagal memotong kuota PO: ' + updatePoErr.message, 'error');
+    }
+    
+    const iteration = activeLocForBill.usedQuota + 1; 
+
+    // Menyisipkan Region ke dalam string location_name
+    const finalLocationName = `${billForm.region} | ${activeLocForBill.name}`;
 
     const dbBillPayload = {
       title: billForm.title,
-      no_bast: billForm.noBast || '-',
+      no_bast: billForm.noBast,
       amount: cleanAmount,
       date: billForm.date,
       year: parseInt(billForm.date.substring(0, 4)),
-      has_po: billForm.hasPo,
-      po_number: billForm.hasPo ? billForm.poNumber : null,
-      location_id: billForm.hasPo ? billForm.locationId : null,
-      period: billForm.hasPo ? billForm.selectedPeriod : null,
+      has_po: true,
+      po_number: billForm.poNumber,
+      location_id: billForm.locationId,
+      period: billForm.selectedPeriod,
       iteration: iteration,
       location_name: finalLocationName
     };
@@ -592,9 +651,7 @@ export default function App() {
         return showNotif('Gagal menyimpan tagihan: ' + insertErr.message, 'error');
     }
 
-    if (billForm.hasPo && updatedLocsForState) {
-      setPos(pos.map(p => String(p.poNumber) === String(billForm.poNumber) ? { ...p, locations: updatedLocsForState } : p));
-    }
+    setPos(pos.map(p => String(p.poNumber) === String(billForm.poNumber) ? { ...p, locations: updatedLocsForState } : p));
 
     const newLocalBill = {
       id: insertedBill[0].id,
@@ -615,7 +672,6 @@ export default function App() {
     showNotif('Tagihan Disimpan & Kuota Dipotong!', 'success');
     
     setBillForm({
-      hasPo: true,
       region: '',
       poNumber: '', 
       locationId: '', 
@@ -627,11 +683,228 @@ export default function App() {
     });
   };
 
+  // Fungsi Import Excel Tagihan
+  const handleFileBillUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.XLSX) {
+      try {
+        const module = await import('https://esm.sh/xlsx');
+        window.XLSX = module.default || module;
+      } catch (err) {
+        return showNotif('Gagal memuat modul pembaca Excel.', 'error');
+      }
+    }
+
+    const XLSX = window.XLSX;
+    const reader = new FileReader();
+    
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+            return showNotif('File Excel Kosong', 'error');
+        }
+
+        const simulatedPOs = JSON.parse(JSON.stringify(pos));
+        
+        const previewArray = data.map((row, index) => {
+            const region = row['Region'] || '';
+            const poNumber = String(row['Master PO'] || '').trim();
+            const locationName = String(row['Lokasi / Peruntukan'] || '').trim();
+            const period = String(row['Periode Tagihan'] || '').trim();
+            const title = row['Judul Tagihan'] || '';
+            const noBast = row['No BAST'] || '-';
+            
+            const rawAmount = row['Nominal Tagihan'];
+            // Menggunakan Smart Parser untuk tagihan
+            const amount = parseExcelNumber(rawAmount);
+            
+            let date = row['Tanggal Invoice'];
+            if (typeof date === 'number') {
+                date = new Date(Math.round((date - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+            } else if (date) {
+               date = String(date); 
+            } else {
+               date = '';
+            }
+
+            let isValid = true;
+            let errorMsg = [];
+            let locationId = null;
+
+            if (!region) { isValid = false; errorMsg.push('Region kosong'); }
+            if (!poNumber) { isValid = false; errorMsg.push('PO kosong'); }
+            if (!locationName) { isValid = false; errorMsg.push('Lokasi kosong'); }
+            if (!title) { isValid = false; errorMsg.push('Judul kosong'); }
+            if (!amount) { isValid = false; errorMsg.push('Nominal invalid'); }
+            if (!date) { isValid = false; errorMsg.push('Tanggal kosong'); }
+
+            if (poNumber && locationName) {
+                const po = simulatedPOs.find(p => p.poNumber === poNumber);
+                if (!po) {
+                    isValid = false; errorMsg.push('Master PO tidak ditemukan');
+                } else {
+                    const loc = po.locations.find(l => l.name.toLowerCase() === locationName.toLowerCase());
+                    if (!loc) {
+                        isValid = false; errorMsg.push('Lokasi tidak ada di PO ini');
+                    } else {
+                        locationId = loc.id;
+                        if (loc.usedQuota >= loc.totalQuota) {
+                            isValid = false; errorMsg.push('Kuota PO habis');
+                        } else {
+                            loc.usedQuota += 1; 
+                        }
+                    }
+                }
+            }
+
+            return {
+                id: `EXB-${index}`,
+                region,
+                hasPo: true,
+                poNumber,
+                locationName,
+                locationId,
+                period,
+                title,
+                noBast,
+                amount,
+                date,
+                isValid,
+                errorMsg: errorMsg.join(', ')
+            };
+        });
+
+        setExcelBillPreview(previewArray);
+        showNotif('Excel berhasil dibaca, silakan periksa preview di bawah.', 'success');
+      } catch (error) {
+        showNotif('Gagal membaca file Excel.', 'error');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleSaveExcelBill = async () => {
+    if (!excelBillPreview) return;
+    
+    const validBills = excelBillPreview.filter(b => b.isValid);
+    if (validBills.length === 0) {
+      return showNotif('Tidak ada data yang valid untuk disimpan.', 'error');
+    }
+
+    const poUpdates = {};
+    const finalBillsToInsert = [];
+    const clonedPos = JSON.parse(JSON.stringify(pos));
+
+    for (const b of validBills) {
+        let iteration = null;
+        let finalLocationName = b.region;
+
+        const poIndex = clonedPos.findIndex(p => p.poNumber === b.poNumber);
+        if (poIndex > -1) {
+            const locIndex = clonedPos[poIndex].locations.findIndex(l => l.id === b.locationId);
+            if (locIndex > -1) {
+                clonedPos[poIndex].locations[locIndex].usedQuota += 1;
+                iteration = clonedPos[poIndex].locations[locIndex].usedQuota;
+                finalLocationName = `${b.region} | ${clonedPos[poIndex].locations[locIndex].name}`;
+                poUpdates[b.poNumber] = clonedPos[poIndex].locations;
+            }
+        }
+
+        finalBillsToInsert.push({
+            title: b.title,
+            no_bast: b.noBast,
+            amount: b.amount,
+            date: b.date,
+            year: parseInt(b.date.substring(0, 4)),
+            has_po: true,
+            po_number: b.poNumber,
+            location_id: b.locationId,
+            period: b.period,
+            iteration: iteration,
+            location_name: finalLocationName
+        });
+    }
+
+    // Update PO Quotas in DB
+    for (const [poNum, newLocs] of Object.entries(poUpdates)) {
+         const { error } = await supabase.from('pos').update({ locations: newLocs }).eq('po_number', poNum);
+         if (error) console.error("Update PO Error:", error);
+    }
+
+    // Insert Bills
+    const { data: insertedBills, error: insertErr } = await supabase.from('bills').insert(finalBillsToInsert).select();
+
+    if (insertErr) {
+        return showNotif('Gagal mengimpor tagihan: ' + insertErr.message, 'error');
+    }
+
+    setPos(clonedPos);
+    
+    const mappedNewBills = insertedBills.map(b => ({
+        id: b.id,
+        title: b.title,
+        noBast: b.no_bast,
+        amount: b.amount,
+        date: b.date,
+        year: b.year,
+        hasPo: b.has_po,
+        poNumber: b.po_number,
+        locationId: b.location_id,
+        period: b.period,
+        iteration: b.iteration,
+        locationName: b.location_name
+    }));
+    
+    setBills([...mappedNewBills, ...bills].sort((a, b) => new Date(b.date) - new Date(a.date)));
+    setExcelBillPreview(null);
+    if(fileBillInputRef.current) fileBillInputRef.current.value = '';
+    showNotif(`${finalBillsToInsert.length} Tagihan Berhasil Diimpor!`, 'success');
+  };
+
+  const handleDownloadTemplateBill = async () => {
+    if (!window.XLSX) {
+      try {
+        const module = await import('https://esm.sh/xlsx');
+        window.XLSX = module.default || module;
+      } catch (err) {
+        return showNotif('Gagal memuat modul pembuat Excel.', 'error');
+      }
+    }
+    
+    const templateData = [
+      {
+        'Region': 'Sulawesi',
+        'Master PO': '4160123456',
+        'Lokasi / Peruntukan': 'LPG Amurang',
+        'Periode Tagihan': 'Januari 2026',
+        'Judul Tagihan': 'Sewa Bulanan Mesin',
+        'No BAST': 'BAST/001/2026',
+        'Nominal Tagihan': 1500000,
+        'Tanggal Invoice': '2026-01-15'
+      }
+    ];
+
+    const ws = window.XLSX.utils.json_to_sheet(templateData);
+    ws['!cols'] = [ {wch:15}, {wch:20}, {wch:25}, {wch:20}, {wch:35}, {wch:20}, {wch:20}, {wch:20} ];
+    
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Template_Import_Tagihan");
+    window.XLSX.writeFile(wb, `Template_Input_Tagihan_Elnusa.xlsx`);
+  };
+
   const handleDeleteBill = async (id) => {
     const billToDelete = bills.find(b => b.id === id);
     if (!billToDelete) return;
 
-    if (billToDelete.hasPo && billToDelete.poNumber && billToDelete.locationId) {
+    if (billToDelete.poNumber && billToDelete.locationId) {
        const poToUpdate = pos.find(p => String(p.poNumber) === String(billToDelete.poNumber));
        
        if(poToUpdate) {
@@ -700,17 +973,13 @@ export default function App() {
     }
 
     let newLocationName = editingBill.locationName || '';
-    if(editingBill.hasPo) {
-        const parts = newLocationName.split(' | ');
-        const locPart = parts.length > 1 ? parts[1] : newLocationName;
-        newLocationName = `${editingBill.region} | ${locPart}`;
-    } else {
-        newLocationName = editingBill.region;
-    }
+    const parts = newLocationName.split(' | ');
+    const locPart = parts.length > 1 ? parts[1] : newLocationName;
+    newLocationName = `${editingBill.region} | ${locPart}`;
 
     const updatePayload = {
       title: editingBill.title,
-      no_bast: editingBill.noBast || '-',
+      no_bast: editingBill.noBast,
       amount: cleanAmount,
       date: editingBill.date,
       location_name: newLocationName,
@@ -732,7 +1001,7 @@ export default function App() {
   // FILTER & SEARCH & PAGINATION (DATA TAGIHAN)
   // ==========================================
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all'); // all, berjalan, backdate, non-po
+  const [filterStatus, setFilterStatus] = useState('all'); 
   const [filterDate, setFilterDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -761,8 +1030,6 @@ export default function App() {
         matchStatus = b.year >= currentYear;
       } else if (filterStatus === 'backdate') {
         matchStatus = b.year < currentYear;
-      } else if (filterStatus === 'non-po') {
-        matchStatus = !b.hasPo;
       }
 
       let matchDate = true;
@@ -842,7 +1109,7 @@ export default function App() {
       'Uraian Tagihan': b.title,
       'No. BAST': b.noBast,
       'Nominal (Rp)': b.amount,
-      'Status Dokumen': b.hasPo ? 'Ada PO' : 'Tanpa PO',
+      'Status Dokumen': 'Ada PO',
       'No. Referensi PO': b.poNumber || '-',
       'Lokasi / Peruntukan': b.locationName || '-',
       'Periode Tagih': b.period || '-'
@@ -863,11 +1130,8 @@ export default function App() {
   const totalBerjalan = berjalanBills.reduce((sum, b) => sum + b.amount, 0);
   const totalBackdate = backdateBills.reduce((sum, b) => sum + b.amount, 0);
 
-  const noPoBills = bills.filter(b => !b.hasPo);
-  const totalNoPo = noPoBills.reduce((sum, b) => sum + b.amount, 0);
-
   const totalNilaiPO = pos.reduce((sum, p) => sum + p.locations.reduce((locSum, loc) => locSum + (parseFloat(loc.value) || 0), 0), 0);
-  const totalDitagihkan = bills.filter(b => b.hasPo).reduce((sum, b) => sum + b.amount, 0);
+  const totalDitagihkan = bills.reduce((sum, b) => sum + b.amount, 0);
   const sisaNilaiPO = totalNilaiPO - totalDitagihkan;
   const persentaseSerapan = totalNilaiPO > 0 ? (totalDitagihkan / totalNilaiPO) * 100 : 0;
 
@@ -875,7 +1139,7 @@ export default function App() {
   pos.forEach(p => {
     p.locations.forEach(loc => {
       // Perhitungan khusus untuk mengakomodasi region trik
-      const locationBills = bills.filter(b => b.hasPo && b.poNumber === p.poNumber && (b.locationName || '').includes(loc.name));
+      const locationBills = bills.filter(b => b.poNumber === p.poNumber && (b.locationName || '').includes(loc.name));
       const totalBilled = locationBills.reduce((sum, b) => sum + b.amount, 0);
       const remainingValue = loc.value - totalBilled;
       const estimatedMonthly = loc.totalQuota > 0 ? loc.value / loc.totalQuota : 0;
@@ -995,14 +1259,12 @@ export default function App() {
                <div className="bg-slate-100 p-3 rounded-lg flex items-center gap-4 text-[13px] mb-4">
                  <div className="flex-1">
                    <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Referensi PO (Terkunci)</span>
-                   <span className="font-semibold text-slate-700">{editingBill.hasPo ? editingBill.poNumber : 'TANPA PO (Pengecualian)'}</span>
+                   <span className="font-semibold text-slate-700">{editingBill.poNumber}</span>
                  </div>
-                 {editingBill.hasPo && (
-                   <div className="flex-1">
+                 <div className="flex-1">
                      <span className="block text-[12px] text-slate-500 font-bold mb-0.5">Lokasi Asal (Terkunci)</span>
                      <span className="font-semibold text-slate-700">{editingBill.locationName} {editingBill.period && `(${editingBill.period})`}</span>
-                   </div>
-                 )}
+                 </div>
                </div>
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1233,8 +1495,8 @@ export default function App() {
               {activeTab === 'tab-home' && (
                 <div className="animate-tab space-y-6">
                   
-                  {/* Baris Atas: 4 KPI Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+                  {/* Baris Atas: 3 KPI Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
                     <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group" 
                          onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('berjalan'); setCurrentPage(1); }}>
                       <div className="flex justify-between items-start mb-2 lg:mb-4">
@@ -1263,16 +1525,6 @@ export default function App() {
                       </div>
                       <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNilaiPO)}>{formatRupiah(totalNilaiPO)}</div>
                       <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-emerald-600 font-bold">{pos.length}</span> Master Aktif</div>
-                    </div>
-
-                    <div className="bg-white border border-slate-200 p-6 rounded-2xl lg:rounded-3xl cursor-pointer hover:shadow-md hover:border-rose-200 transition-all group" 
-                         onClick={() => { setActiveTab('tab-data-tagihan'); setFilterStatus('non-po'); setCurrentPage(1); }}>
-                      <div className="flex justify-between items-start mb-2 lg:mb-4">
-                         <h3 className="text-slate-500 font-bold text-[11px] tracking-wider uppercase">Tagihan Non-PO</h3>
-                         <div className="p-2 bg-rose-50 rounded-lg text-rose-600 group-hover:scale-110 transition-transform"><AlertTriangle size={16}/></div>
-                      </div>
-                      <div className="text-2xl font-bold text-slate-800 truncate tracking-tight" title={formatRupiah(totalNoPo)}>{formatRupiah(totalNoPo)}</div>
-                      <div className="text-[12px] text-slate-500 mt-1 lg:mt-2 font-medium"><span className="text-rose-600 font-bold">{noPoBills.length}</span> Pengecualian</div>
                     </div>
                   </div>
 
@@ -1345,8 +1597,8 @@ export default function App() {
                                  </div>
                                  <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5"><CalendarClock size={12} className="text-slate-400" /> {new Date(b.date).toLocaleDateString('id-ID')}</span>
-                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase ${b.hasPo ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                                       {b.hasPo ? b.poNumber : 'NON-PO'}
+                                    <span className="text-[9px] font-bold px-2 py-1 rounded-md tracking-wider uppercase bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                       {b.poNumber}
                                     </span>
                                  </div>
                               </div>
@@ -1368,7 +1620,7 @@ export default function App() {
                     <h3 className="font-bold text-[18px] text-slate-800">Daftar Kontrak PO</h3>
                   </div>
 
-                  {/* TOOLBAR (Entries, Search) */}
+                  {/* TOOLBAR */}
                   <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
                     <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
                       <select 
@@ -1420,7 +1672,6 @@ export default function App() {
                           {currentPOs.length > 0 ? currentPOs.map((p, index) => {
                             const isExpanded = expandedPOs[p.idDB];
                             
-                            // Kalkulasi total PO ini
                             const totalValue = p.locations.reduce((sum, l) => sum + (l.value || 0), 0);
                             const totalBilled = p.locations.reduce((sum, l) => sum + getLocationStats(l, p.poNumber).totalBilled, 0);
                             const progress = totalValue > 0 ? (totalBilled / totalValue) * 100 : 0;
@@ -1448,12 +1699,11 @@ export default function App() {
                                   </td>
                                 </tr>
                                 
-                                {/* EXPANDED CARDS CONTENT */}
                                 {isExpanded && (
                                   <tr>
                                     <td colSpan="6" className="p-0 bg-slate-50 border-b-2 border-blue-200 shadow-inner">
                                       <div className="p-6">
-                                        <h4 className="text-[14px] font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Rincian Peruntukan Lokasi: <span className="text-[#12649b]">{p.poNumber}</span></h4>
+                                        <h4 className="text-[14px] font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Rincian Lokasi: <span className="text-[#12649b]">{p.poNumber}</span></h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                           {p.locations.map(l => {
                                             const s = getLocationStats(l, p.poNumber);
@@ -1470,7 +1720,7 @@ export default function App() {
                                                     </div>
                                                   </div>
                                                   <div className="text-right">
-                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Penyerapan</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Serapan</div>
                                                     <div className="text-[12px] font-bold text-[#12649b]">{locProgress.toFixed(1)}%</div>
                                                   </div>
                                                 </div>
@@ -1482,7 +1732,7 @@ export default function App() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <div className="text-[11px] font-medium text-slate-500">Dokumen: {l.usedQuota} / {l.totalQuota}</div>
-                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Potensi PO Additional!</div>}
+                                                    {s.isShortageWarning && <div className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertTriangle size={10}/> Dana Menipis!</div>}
                                                 </div>
                                               </div>
                                             )
@@ -1507,11 +1757,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Pagination Controls PO */}
                   {filteredPOs.length > 0 && (
                     <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
                       <div>
-                        Showing <span className="font-bold">{indexOfFirstPO + 1}</span> to <span className="font-bold">{Math.min(indexOfLastPO, filteredPOs.length)}</span> from <span className="font-bold">{filteredPOs.length}</span> entries
+                        Menampilkan <span className="font-bold">{indexOfFirstPO + 1}</span> hingga <span className="font-bold">{Math.min(indexOfLastPO, filteredPOs.length)}</span> dari <span className="font-bold">{filteredPOs.length}</span> entri
                       </div>
                       
                       <div className="flex items-center gap-1 mt-3 sm:mt-0">
@@ -1520,14 +1769,14 @@ export default function App() {
                           disabled={currentPagePO === 1}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          <ChevronLeft size={14} /> Previous
+                          <ChevronLeft size={14} /> Sebelumnya
                         </button>
                         <button 
                           onClick={() => setCurrentPagePO(prev => Math.min(prev + 1, totalPagesPO))}
                           disabled={currentPagePO === totalPagesPO}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          Next <ChevronRight size={14} />
+                          Selanjutnya <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
@@ -1538,18 +1787,16 @@ export default function App() {
               {/* TAB: DATA TAGIHAN VIEW */}
               {activeTab === 'tab-data-tagihan' && (
                 <div className="animate-tab flex flex-col h-full">
-                  {/* Header & Export Button */}
                   <div className="flex flex-col sm:flex-row justify-between mb-4 gap-4 items-center mt-2">
                     <h3 className="font-bold text-[18px] text-slate-800">Daftar Tagihan</h3>
                     <button 
                       onClick={handleExportExcel} 
                       className="bg-[#12649b] text-white font-bold py-2 px-5 rounded flex items-center justify-center gap-2 text-[13px] shadow-sm hover:bg-blue-800 transition-colors"
                     >
-                      <Download size={16}/> Export ke Excel
+                      <Download size={16}/> Ekspor ke Excel
                     </button>
                   </div>
                   
-                  {/* TOOLBAR (Entries, Filter, Search) */}
                   <div className="mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-3 border border-slate-200 rounded-t-lg shadow-sm">
                     <div className="flex items-center gap-2 text-[13px] text-slate-700 w-full lg:w-auto">
                       <select 
@@ -1562,7 +1809,7 @@ export default function App() {
                         <option value="50">50</option>
                         <option value="100">100</option>
                       </select>
-                      <span>entries per page</span>
+                      <span>entri per halaman</span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
@@ -1570,7 +1817,6 @@ export default function App() {
                         <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'all' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
                         <button onClick={() => setFilterStatus('berjalan')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'berjalan' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Berjalan</button>
                         <button onClick={() => setFilterStatus('backdate')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'backdate' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Backdate</button>
-                        <button onClick={() => setFilterStatus('non-po')} className={`px-3 py-1.5 text-[12px] font-bold rounded ${filterStatus === 'non-po' ? 'bg-white text-[#12649b] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-PO</button>
                       </div>
                       <div className="relative">
                         <input 
@@ -1591,7 +1837,7 @@ export default function App() {
                           value={searchTerm} 
                           onChange={e => setSearchTerm(e.target.value)} 
                           className="w-full sm:w-64 pl-3 pr-8 py-1.5 rounded border border-slate-300 text-[13px] outline-none focus:border-[#12649b] bg-white" 
-                          placeholder="Search..." 
+                          placeholder="Pencarian..." 
                         />
                         {searchTerm ? (
                           <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-500">
@@ -1604,7 +1850,6 @@ export default function App() {
                     </div>
                   </div>
                   
-                  {/* DAFTAR DATA BERGAYA TABEL */}
                   <div className="bg-white border border-slate-200 border-t-0 rounded-b-lg shadow-sm overflow-hidden mb-4">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse min-w-max">
@@ -1613,10 +1858,10 @@ export default function App() {
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Uraian Tagihan</th>
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Tanggal</th>
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Referensi PO</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Region & Lokasi</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Wilayah & Lokasi</th>
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap">Nominal</th>
                             <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider border-r border-[#1a73a8] last:border-0 whitespace-nowrap text-center">Status</th>
-                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Actions</th>
+                            <th className="px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-center">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
@@ -1632,7 +1877,7 @@ export default function App() {
                                   {new Date(b.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                                 </td>
                                 <td className="px-4 py-4 text-[13px] text-slate-700 font-semibold">
-                                  {b.hasPo ? b.poNumber : <span className="italic text-slate-400">Non-PO</span>}
+                                  {b.poNumber}
                                 </td>
                                 <td className="px-4 py-4 text-[13px] text-slate-600">
                                   <div className="font-medium">{b.locationName || '-'}</div>
@@ -1642,11 +1887,7 @@ export default function App() {
                                   {formatRupiah(b.amount)}
                                 </td>
                                 <td className="px-4 py-4 text-[12px] font-bold text-center">
-                                  {!b.hasPo ? (
-                                     <span className="text-rose-600">Pengecualian</span>
-                                  ) : (
-                                     <span className={isBackdate ? 'text-amber-600' : 'text-[#2bb673]'}>{isBackdate ? 'Backdate' : 'Closed'}</span>
-                                  )}
+                                  <span className={isBackdate ? 'text-amber-600' : 'text-[#2bb673]'}>{isBackdate ? 'Backdate' : 'Selesai'}</span>
                                 </td>
                                 <td className="px-4 py-4 text-[13px] text-center">
                                   <div className="flex items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
@@ -1669,11 +1910,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Pagination Controls */}
                   {filteredBills.length > 0 && (
                     <div className="flex flex-col sm:flex-row justify-between items-center text-[13px] text-slate-700 bg-white p-4 border border-slate-200 rounded-lg shadow-sm">
                       <div>
-                        Showing <span className="font-bold">{indexOfFirstBill + 1}</span> to <span className="font-bold">{Math.min(indexOfLastBill, filteredBills.length)}</span> from <span className="font-bold">{filteredBills.length}</span> entries
+                        Menampilkan <span className="font-bold">{indexOfFirstBill + 1}</span> hingga <span className="font-bold">{Math.min(indexOfLastBill, filteredBills.length)}</span> dari <span className="font-bold">{filteredBills.length}</span> entri
                       </div>
                       
                       <div className="flex items-center gap-1 mt-3 sm:mt-0">
@@ -1682,234 +1922,18 @@ export default function App() {
                           disabled={currentPage === 1}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          <ChevronLeft size={14} /> Previous
+                          <ChevronLeft size={14} /> Sebelumnya
                         </button>
                         <button 
                           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                           disabled={currentPage === totalPages}
                           className="px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 bg-white font-medium transition-colors"
                         >
-                          Next <ChevronRight size={14} />
+                          Selanjutnya <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* TAB: INPUT TAGIHAN */}
-              {activeTab === 'tab-input-tagihan' && (
-                <div className="animate-tab">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
-                    
-                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                      <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
-                        Input Tagihan Baru
-                      </h3>
-                      <label className="flex items-center gap-2 cursor-pointer text-[13px] font-bold text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={!billForm.hasPo} 
-                          onChange={(e) => setBillForm({
-                            ...billForm, 
-                            hasPo: !e.target.checked, 
-                            poNumber: '', 
-                            locationId: '', 
-                            selectedPeriod: ''
-                          })} 
-                          className="w-4 h-4 text-[#12649b] rounded border-slate-300 focus:ring-[#12649b]" 
-                        />
-                        Tagihan Non-PO (Pengecualian)
-                        {!billForm.hasPo && <AlertTriangle className="text-rose-500 ml-1" size={16} />}
-                      </label>
-                    </div>
-
-                    <form onSubmit={handleSaveBill} className="space-y-6">
-                      
-                      {/* Region Input (Selalu Ada) */}
-                      <div>
-                        <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                          Region <span className="text-red-500">*</span>
-                        </label>
-                        <select 
-                          required
-                          value={billForm.region}
-                          onChange={e => setBillForm({...billForm, region: e.target.value})}
-                          className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] bg-white appearance-none cursor-pointer"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 9l4-4 4 4m0 6l-4 4-4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em` }}
-                        >
-                          <option value="" disabled>Pilih Region</option>
-                          <option value="Sumbagut">Sumbagut</option>
-                          <option value="Sumbagsel">Sumbagsel</option>
-                          <option value="Jabalinus">Jabalinus</option>
-                          <option value="Kalimantan">Kalimantan</option>
-                          <option value="Sulawesi">Sulawesi</option>
-                          <option value="Malupa">Malupa</option>
-                        </select>
-                      </div>
-
-                      {/* BAGIAN REFERENSI PO (JIKA ADA) */}
-                      {billForm.hasPo && (
-                        <>
-                          <div>
-                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                              Master PO <span className="text-red-500">*</span>
-                            </label>
-                            <POAutocomplete 
-                              value={billForm.poNumber} 
-                              options={pos.map(p => p.poNumber)} 
-                              onChange={(v) => setBillForm({
-                                ...billForm, 
-                                poNumber: v, 
-                                locationId: '', 
-                                selectedPeriod: ''
-                              })} 
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                              Lokasi / Peruntukan <span className="text-red-500">*</span>
-                            </label>
-                            <ObjectAutocomplete 
-                              value={billForm.locationId} 
-                              options={activePoForBill ? activePoForBill.locations.map(l => ({ 
-                                id: l.id, 
-                                label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
-                                disabled: l.usedQuota >= l.totalQuota 
-                              })) : []} 
-                              onChange={(v) => setBillForm({
-                                ...billForm, 
-                                locationId: v, 
-                                selectedPeriod: ''
-                              })} 
-                              disabled={!billForm.poNumber} 
-                              placeholder="-- Pilih Lokasi --" 
-                            />
-                          </div>
-
-                          {/* TOMBOL OPSI PERIODE BULAN */}
-                          {activeLocForBill?.generatedPeriods?.length > 0 && (
-                            <div className="pt-2 animate-in fade-in duration-300">
-                              <label className="block text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
-                                <span>Pilih Opsi Periode Tagihan <span className="text-red-500">*</span></span>
-                                <span className="text-[#12649b] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
-                              </label>
-                              <div className="flex flex-wrap gap-2.5">
-                                {activeLocForBill.generatedPeriods.map((p, i) => {
-                                  const isUsed = i < activeLocForBill.usedQuota;
-                                  return (
-                                    <label 
-                                      key={i} 
-                                      className={`cursor-pointer px-5 py-2.5 rounded-lg border text-[13px] transition-all
-                                        ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
-                                        billForm.selectedPeriod === p ? 'bg-[#12649b] text-white border-[#12649b] font-bold shadow-md transform scale-105' : 
-                                        'bg-white text-slate-700 border-slate-300 hover:border-[#12649b] hover:bg-blue-50 font-semibold'}
-                                      `}
-                                    >
-                                      <input 
-                                        type="radio" 
-                                        name="periodSelect" 
-                                        className="hidden" 
-                                        value={p} 
-                                        disabled={isUsed}
-                                        checked={billForm.selectedPeriod === p} 
-                                        onChange={(e) => setBillForm({...billForm, selectedPeriod: e.target.value})} 
-                                      />
-                                      {p} {isUsed && ' ✓'}
-                                    </label>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {activeLocForBill && (() => {
-                            const stats = getLocationStats(activeLocForBill, billForm.poNumber);
-                            if (stats.isShortageWarning) {
-                              return (
-                                <div className="mt-2 p-4 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
-                                  <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
-                                  <div>
-                                    <h5 className="text-[13px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
-                                    <p className="text-[13px] text-rose-600 mt-1 leading-relaxed">
-                                      Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </>
-                      )}
-                      
-                      {/* BAGIAN DATA INVOICE UMUM */}
-                      <div>
-                        <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                          Judul / Uraian Tagihan <span className="text-red-500">*</span>
-                        </label>
-                        <input 
-                          type="text" 
-                          required
-                          value={billForm.title} 
-                          onChange={e => setBillForm({...billForm, title: e.target.value})} 
-                          className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
-                          placeholder="Deskripsikan Uraian Tagihan..." 
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                           <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                             No. BAST <span className="text-red-500">*</span>
-                           </label>
-                           <input 
-                             type="text" 
-                             required
-                             value={billForm.noBast} 
-                             onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
-                             className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
-                             placeholder="BAST-..." 
-                           />
-                        </div>
-                        <div>
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                            Tanggal Invoice <span className="text-red-500">*</span>
-                          </label>
-                          <input 
-                            type="date" 
-                            required
-                            value={billForm.date} 
-                            onChange={e => setBillForm({...billForm, date: e.target.value})} 
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] text-slate-700" 
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
-                            Nominal (Rp) <span className="text-red-500">*</span>
-                          </label>
-                          <input 
-                            type="text" 
-                            required
-                            value={billForm.amount} 
-                            onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[15px] font-bold text-slate-800" 
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="pt-6 flex justify-end">
-                        <button 
-                          type="submit" 
-                          className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </form>
-                  </div>
                 </div>
               )}
 
@@ -1918,16 +1942,16 @@ export default function App() {
                 <div className="animate-tab">
                   <div className="flex justify-end mb-6">
                     {/* TOGGLE INPUT MODE */}
-                    <div className="bg-slate-200 p-1.5 rounded-2xl flex gap-1 shadow-inner">
+                    <div className="bg-[#e2e8f0] p-1.5 rounded-xl flex gap-1 shadow-inner">
                       <button 
                         onClick={() => setInputMode('manual')} 
-                        className={`px-5 py-2 rounded-xl text-[13px] font-bold transition-all ${inputMode === 'manual' ? 'bg-white shadow text-[#12649b]' : 'text-slate-500 hover:bg-slate-300'}`}
+                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 ${inputMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         Input Manual
                       </button>
                       <button 
                         onClick={() => setInputMode('excel')} 
-                        className={`px-5 py-2 rounded-xl text-[13px] font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:bg-slate-300'}`}
+                        className={`px-5 py-2 rounded-lg text-[13px] font-bold flex items-center gap-2 transition-all ${inputMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
                       >
                         <FileSpreadsheet size={16}/> Import Excel
                       </button>
@@ -1943,14 +1967,15 @@ export default function App() {
                         </h3>
                       </div>
                       
-                      <div className="space-y-6">
+                      <form onSubmit={handleSaveManualPO} className="space-y-6">
                         <div>
                           <label className="block text-[13px] font-bold text-slate-800 mb-2">Nomor Induk PO <span className="text-red-500">*</span></label>
                           <input 
                             type="text" 
+                            required
                             value={manualForm.poNumber} 
                             onChange={e => setManualForm({...manualForm, poNumber: e.target.value})} 
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                            className="w-full max-w-md px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
                             placeholder="Contoh: 416xxxxxxx" 
                           />
                         </div>
@@ -1959,36 +1984,19 @@ export default function App() {
                           <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-slate-800 text-[14px]">Daftar Lokasi di bawah PO ini</h4>
                             <button 
-                              onClick={() => setManualForm(p => ({
-                                ...p, 
-                                locations: [
-                                  ...p.locations,
-                                  {
-                                    id: `L-${Date.now()}`,
-                                    name: '',
-                                    value: '',
-                                    totalQuota: '',
-                                    startMonth: '',
-                                    billingType: 'partial'
-                                  }
-                                ]
-                              }))} 
+                              type="button"
+                              onClick={handleAddLocationRow} 
                               className="text-[13px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
                             >
                               <Plus size={16}/> Tambah Baris
                             </button>
                           </div>
                           
-                          {/* LOOPING INPUT LOKASI */}
                           <div className="space-y-4">
-                            {manualForm.locations.map((loc) => {
-                                 const previewMonths = (loc.startMonth && loc.totalQuota > 0 && loc.billingType === 'partial') 
-                                      ? generateMonthsArray(loc.startMonth, loc.totalQuota) : [];
-
-                                 return (
+                            {manualForm.locations.map((loc) => (
                               <div key={loc.id} className="p-5 rounded-xl border border-slate-200 bg-slate-50 grid grid-cols-1 md:grid-cols-12 gap-4 relative group shadow-sm">
                                 <div className="md:col-span-4">
-                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
+                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Lokasi <span className="text-red-500">*</span></label>
                                   <LocationAutocomplete 
                                     value={loc.name} 
                                     options={availableLocationNames} 
@@ -1996,9 +2004,10 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="md:col-span-3">
-                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Nilai PO (Rp) <span className="text-red-500">*</span></label>
+                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Nilai PO (Rp) <span className="text-red-500">*</span></label>
                                   <input 
                                     type="text" 
+                                    required
                                     value={loc.value} 
                                     onChange={e => handleLocationChange(loc.id, 'value', formatInputNumber(e.target.value))} 
                                     className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px] font-bold" 
@@ -2006,16 +2015,17 @@ export default function App() {
                                   />
                                 </div>
                                 <div className="md:col-span-2">
-                                  <label className="block text-[13px] font-bold text-slate-800 mb-2">Kuota (Bulan) <span className="text-red-500">*</span></label>
+                                  <label className="block text-[12px] font-bold text-slate-800 mb-2">Kuota (Bulan) <span className="text-red-500">*</span></label>
                                   <input 
                                     type="number" 
+                                    required
                                     value={loc.totalQuota} 
                                     onChange={e => handleLocationChange(loc.id, 'totalQuota', e.target.value)} 
                                     className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px]" 
                                   />
                                 </div>
                                 <div className="md:col-span-3">
-                                   <label className="block text-[13px] font-bold text-slate-800 mb-2">Start Month</label>
+                                   <label className="block text-[12px] font-bold text-slate-800 mb-2">Start Month</label>
                                    <input 
                                      type="month" 
                                      value={loc.startMonth} 
@@ -2023,29 +2033,29 @@ export default function App() {
                                      className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-1 focus:ring-[#12649b] focus:border-[#12649b] text-[13px]" 
                                    />
                                 </div>
-                                <button 
-                                  onClick={() => setManualForm(p => ({ 
-                                    ...p, 
-                                    locations: p.locations.filter(x => x.id !== loc.id)
-                                  }))} 
-                                  className="absolute -top-3 -right-3 bg-white text-rose-500 border border-rose-200 rounded-full p-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
-                                >
-                                  <X size={14}/>
-                                </button>
+                                {manualForm.locations.length > 1 && (
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleRemoveLocationRow(loc.id)} 
+                                    className="absolute -top-3 -right-3 bg-white text-rose-500 border border-rose-200 rounded-full p-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                                  >
+                                    <X size={14}/>
+                                  </button>
+                                )}
                               </div>
-                            )})}
+                            ))}
                           </div>
                         </div>
                         
                         <div className="pt-6 flex justify-end">
                           <button 
-                            onClick={handleSaveManualPO} 
+                            type="submit" 
                             className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
                           >
                             Simpan Data PO
                           </button>
                         </div>
-                      </div>
+                      </form>
                     </div>
                   ) : (
                     
@@ -2055,12 +2065,18 @@ export default function App() {
                          <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
                            Unggah Excel Master PO
                          </h3>
+                         <button 
+                           onClick={handleDownloadTemplatePO} 
+                           className="text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                         >
+                           <Download size={14}/> Unduh Template
+                         </button>
                       </div>
 
                       <div className="border-2 border-dashed border-emerald-200 p-12 text-center relative rounded-xl bg-emerald-50/20">
                         <UploadCloud size={48} className="mx-auto text-emerald-500 mb-4 opacity-40" />
                         <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
-                           Tarik dan lepas file Excel Anda di sini, atau klik tombol di bawah untuk mencari file.
+                           Tarik dan lepas file Excel Master PO Anda di sini, atau klik tombol di bawah untuk mencari file.
                         </p>
                         <div className="inline-block relative">
                           <input 
@@ -2080,13 +2096,13 @@ export default function App() {
                         <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                           <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
                             <h3 className="font-bold text-[13px]">Preview Data Excel ({excelPreview.length} PO Terdeteksi)</h3>
-                            <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400">
+                            <button onClick={() => setExcelPreview(null)} className="p-2 text-slate-400 hover:text-rose-500">
                               <X size={18}/>
                             </button>
                           </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider">
+                          <div className="overflow-x-auto max-h-96 main-scroll">
+                            <table className="w-full text-left text-xs min-w-max">
+                              <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider sticky top-0 shadow-sm z-10">
                                 <tr>
                                   <th className="px-6 py-4 border-r border-slate-200 last:border-0">No PO</th>
                                   <th className="px-6 py-4 border-r border-slate-200 last:border-0">Daftar Lokasi & Nilai</th>
@@ -2123,6 +2139,315 @@ export default function App() {
                               className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-sm hover:bg-emerald-700 text-[13px]"
                             >
                               Ya, Simpan {excelPreview.length} PO ke Cloud
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: INPUT TAGIHAN */}
+              {activeTab === 'tab-input-tagihan' && (
+                <div className="animate-tab">
+                  <div className="flex justify-end mb-6">
+                    {/* TOGGLE INPUT MODE */}
+                    <div className="bg-[#e2e8f0] p-1.5 rounded-xl flex gap-1 shadow-inner">
+                      <button 
+                        onClick={() => setInputBillMode('manual')} 
+                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 ${inputBillMode === 'manual' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        Input Manual
+                      </button>
+                      <button 
+                        onClick={() => setInputBillMode('excel')} 
+                        className={`px-5 py-2 rounded-lg text-[13px] font-bold flex items-center gap-2 transition-all ${inputBillMode === 'excel' ? 'bg-white shadow-sm text-[#12649b]' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        <FileText size={16}/> Import Excel
+                      </button>
+                    </div>
+                  </div>
+
+                  {inputBillMode === 'manual' ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2">
+                      
+                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                        <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                          Input Tagihan Baru
+                        </h3>
+                      </div>
+
+                      <form onSubmit={handleSaveBill} className="space-y-6">
+                        
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Region <span className="text-red-500">*</span>
+                          </label>
+                          <select 
+                            required
+                            value={billForm.region}
+                            onChange={e => setBillForm({...billForm, region: e.target.value})}
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:border-[#12649b] text-[13px] bg-white appearance-none cursor-pointer"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 9l4-4 4 4m0 6l-4 4-4-4'/%3E%3C/svg%3E")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em` }}
+                          >
+                            <option value="" disabled>Pilih Region</option>
+                            <option value="Sumbagut">Sumbagut</option>
+                            <option value="Sumbagsel">Sumbagsel</option>
+                            <option value="Jabalinus">Jabalinus</option>
+                            <option value="Kalimantan">Kalimantan</option>
+                            <option value="Sulawesi">Sulawesi</option>
+                            <option value="Malupa">Malupa</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Master PO <span className="text-red-500">*</span>
+                          </label>
+                          <POAutocomplete 
+                            value={billForm.poNumber} 
+                            options={pos.map(p => p.poNumber)} 
+                            onChange={(v) => setBillForm({
+                              ...billForm, 
+                              poNumber: v, 
+                              locationId: '', 
+                              selectedPeriod: ''
+                            })} 
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Lokasi / Peruntukan <span className="text-red-500">*</span>
+                          </label>
+                          <ObjectAutocomplete 
+                            value={billForm.locationId} 
+                            options={activePoForBill ? activePoForBill.locations.map(l => ({ 
+                              id: l.id, 
+                              label: `${l.name} (${l.usedQuota}/${l.totalQuota})`, 
+                              disabled: l.usedQuota >= l.totalQuota 
+                            })) : []} 
+                            onChange={(v) => setBillForm({
+                              ...billForm, 
+                              locationId: v, 
+                              selectedPeriod: ''
+                            })} 
+                            disabled={!billForm.poNumber} 
+                            placeholder="-- Pilih Lokasi --" 
+                          />
+                        </div>
+
+                        {activeLocForBill?.generatedPeriods?.length > 0 && (
+                          <div className="pt-2 animate-in fade-in duration-300">
+                            <label className="block text-[13px] font-bold text-slate-800 mb-3 flex justify-between">
+                              <span>Pilih Opsi Periode Tagihan <span className="text-red-500">*</span></span>
+                              <span className="text-[#12649b] font-semibold">Progress: {activeLocForBill.usedQuota}/{activeLocForBill.totalQuota}</span>
+                            </label>
+                            <div className="flex flex-wrap gap-2.5">
+                              {activeLocForBill.generatedPeriods.map((p, i) => {
+                                const isUsed = i < activeLocForBill.usedQuota;
+                                return (
+                                  <label 
+                                    key={i} 
+                                    className={`cursor-pointer px-5 py-2.5 rounded-lg border text-[13px] transition-all
+                                      ${isUsed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 
+                                      billForm.selectedPeriod === p ? 'bg-[#12649b] text-white border-[#12649b] font-bold shadow-md transform scale-105' : 
+                                      'bg-white text-slate-700 border-slate-300 hover:border-[#12649b] hover:bg-blue-50 font-semibold'}
+                                    `}
+                                  >
+                                    <input 
+                                      type="radio" 
+                                      name="periodSelect" 
+                                      className="hidden" 
+                                      value={p} 
+                                      disabled={isUsed}
+                                      checked={billForm.selectedPeriod === p} 
+                                      onChange={(e) => setBillForm({...billForm, selectedPeriod: e.target.value})} 
+                                    />
+                                    {p} {isUsed && ' ✓'}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {activeLocForBill && (() => {
+                          const stats = getLocationStats(activeLocForBill, billForm.poNumber);
+                          if (stats.isShortageWarning) {
+                            return (
+                              <div className="mt-2 p-4 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-3 animate-in fade-in zoom-in">
+                                <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={18} />
+                                <div>
+                                  <h5 className="text-[13px] font-bold text-rose-800">Peringatan: Potensi Nilai PO Kurang!</h5>
+                                  <p className="text-[13px] text-rose-600 mt-1 leading-relaxed">
+                                    Sisa kuota tinggal 1 kali tagih, namun sisa saldo PO (<strong>{formatRupiah(stats.remainingValue)}</strong>) lebih kecil dari estimasi awal per bulan (<strong>{formatRupiah(stats.estimatedMonthly)}</strong>). Pastikan tagihan final tidak melebihi sisa saldo PO.
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        
+                        <div>
+                          <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                            Judul / Uraian Tagihan <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            required
+                            value={billForm.title} 
+                            onChange={e => setBillForm({...billForm, title: e.target.value})} 
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                            placeholder="Deskripsikan Uraian Tagihan..." 
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                             <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                               No. BAST <span className="text-red-500">*</span>
+                             </label>
+                             <input 
+                               type="text" 
+                               required
+                               value={billForm.noBast} 
+                               onChange={e => setBillForm({...billForm, noBast: e.target.value})} 
+                               className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px]" 
+                               placeholder="BAST-..." 
+                             />
+                          </div>
+                          <div>
+                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                              Tanggal Invoice <span className="text-red-500">*</span>
+                            </label>
+                            <input 
+                              type="date" 
+                              required
+                              value={billForm.date} 
+                              onChange={e => setBillForm({...billForm, date: e.target.value})} 
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[13px] text-slate-700" 
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-[13px] font-bold text-slate-800 mb-2">
+                              Nominal (Rp) <span className="text-red-500">*</span>
+                            </label>
+                            <input 
+                              type="text" 
+                              required
+                              value={billForm.amount} 
+                              onChange={e => setBillForm({...billForm, amount: formatInputNumber(e.target.value)})} 
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#12649b] focus:ring-1 focus:ring-[#12649b] text-[15px] font-bold text-slate-800" 
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="pt-6 flex justify-end">
+                          <button 
+                            type="submit" 
+                            className="bg-[#12649b] hover:bg-blue-800 text-white font-bold py-3 px-10 rounded-lg shadow-sm transition-colors text-[14px]"
+                          >
+                            Simpan
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    /* MODE EXCEL TAGIHAN */
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-10 mt-2 space-y-6">
+                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                         <h3 className="text-[20px] font-bold text-slate-800 flex items-center gap-3">
+                           Unggah Excel Data Tagihan
+                         </h3>
+                         <button 
+                           onClick={handleDownloadTemplateBill} 
+                           className="text-[12px] font-bold text-[#12649b] bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                         >
+                           <Download size={14}/> Unduh Template
+                         </button>
+                      </div>
+
+                      <div className="border-2 border-dashed border-blue-200 p-12 text-center relative rounded-xl bg-blue-50/20">
+                        <UploadCloud size={48} className="mx-auto text-blue-500 mb-4 opacity-40" />
+                        <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
+                           Tarik dan lepas file Excel Tagihan Anda di sini, atau klik tombol di bawah untuk mencari file. Sistem akan memvalidasi kuota secara otomatis.
+                        </p>
+                        <div className="inline-block relative">
+                          <input 
+                            type="file" 
+                            ref={fileBillInputRef} 
+                            accept=".xlsx, .xls" 
+                            onChange={handleFileBillUpload} 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                          />
+                          <div className="bg-[#12649b] text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-800 transition-colors shadow-sm text-[13px]">
+                            <FileSpreadsheet size={18}/> Pilih File Tagihan
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {excelBillPreview && (
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+                          <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
+                            <h3 className="font-bold text-[13px]">Preview Data Excel ({excelBillPreview.length} Baris Dibaca)</h3>
+                            <button onClick={() => setExcelBillPreview(null)} className="p-2 text-slate-400 hover:text-rose-500">
+                              <X size={18}/>
+                            </button>
+                          </div>
+                          <div className="overflow-x-auto max-h-96 main-scroll">
+                            <table className="w-full text-left text-xs min-w-max">
+                              <thead className="bg-slate-100 text-slate-500 uppercase font-bold tracking-wider sticky top-0 shadow-sm z-10">
+                                <tr>
+                                  <th className="px-4 py-3 border-r border-slate-200 text-center w-10">Valid</th>
+                                  <th className="px-4 py-3 border-r border-slate-200">Uraian Tagihan</th>
+                                  <th className="px-4 py-3 border-r border-slate-200">Keterangan PO</th>
+                                  <th className="px-4 py-3 border-r border-slate-200">Nominal</th>
+                                  <th className="px-4 py-3">Pesan Sistem</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y border-t border-slate-100">
+                                {excelBillPreview.map((b) => (
+                                  <tr key={b.id} className={`transition-colors ${b.isValid ? 'hover:bg-blue-50/20' : 'bg-rose-50/30'}`}>
+                                    <td className="px-4 py-4 text-center align-top">
+                                      {b.isValid ? <CheckCircle size={16} className="text-emerald-500 mx-auto"/> : <AlertTriangle size={16} className="text-rose-500 mx-auto"/>}
+                                    </td>
+                                    <td className="px-4 py-4 align-top">
+                                      <div className="font-bold text-[#12649b] text-[13px]">{b.title}</div>
+                                      <div className="text-slate-400 text-[11px] mt-1">{new Date(b.date).toLocaleDateString('id-ID')} | BAST: {b.noBast}</div>
+                                    </td>
+                                    <td className="px-4 py-4 align-top">
+                                      <div className="font-semibold text-slate-700 text-[12px]">{b.poNumber}</div>
+                                      <div className="text-slate-500 text-[11px] mt-0.5">{b.region} - {b.locationName}</div>
+                                    </td>
+                                    <td className="px-4 py-4 align-top font-bold text-slate-700 whitespace-nowrap">
+                                      {formatRupiah(b.amount)}
+                                    </td>
+                                    <td className="px-4 py-4 align-top">
+                                      {b.isValid ? (
+                                        <span className="text-emerald-600 font-semibold text-[11px]">Siap Diimpor</span>
+                                      ) : (
+                                        <span className="text-rose-600 font-bold text-[11px]">{b.errorMsg}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-6 bg-blue-50 border-t flex items-center justify-between">
+                            <div className="text-[12px] text-slate-600">
+                               Hanya baris dengan status <strong className="text-emerald-600">Valid</strong> yang akan dimasukkan ke database.
+                            </div>
+                            <button 
+                              onClick={handleSaveExcelBill} 
+                              className="bg-[#12649b] text-white font-bold py-3 px-8 rounded-lg shadow-sm hover:bg-blue-800 text-[13px] disabled:opacity-50"
+                              disabled={!excelBillPreview.some(b => b.isValid)}
+                            >
+                              Simpan Tagihan Valid
                             </button>
                           </div>
                         </div>
