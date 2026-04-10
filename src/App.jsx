@@ -929,7 +929,7 @@ export default function App() {
         'Lokasi / Peruntukan': 'LPG Amurang',
         'Periode Tagihan': 'Januari 2026',
         'Judul Tagihan': 'Sewa Bulanan Mesin',
-        'No BAST': 'BAST/001/2026',
+        'No BAST': 'BAST-12345/EPN/I/2026',
         'Nominal Tagihan': 1500000,
         'Tanggal Invoice': '2026-01-15'
       }
