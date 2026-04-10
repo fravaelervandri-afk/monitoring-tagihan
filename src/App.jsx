@@ -482,6 +482,10 @@ export default function App() {
           const startRaw = row['Start Month'] || row['start month'];
           const start = parseIndonesianMonth(startRaw, currentYear);
 
+          const end = row['End Month'] || row['end month'] || '';
+          const desc = row['Keterangan'] || row['Keterangan Periode'] || '';
+          const jenis = row['PEKERJAAN'] || row['Jenis Tagihan'] || row['Jenis'] || 'Lainnya';
+
           let generatedPeriods = [];
           if (start && finalQuota > 0) {
               generatedPeriods = generateMonthsArray(start, finalQuota);
@@ -570,9 +574,6 @@ export default function App() {
       'Nilai PO': 15000000,
       'Jumlah Bulan': 12,
       'Start Month': '2026-01',
-      'End Month': '2026-12',
-      'Keterangan': 'Contoh Keterangan Periode',
-      'Jenis Tagihan': 'Sewa Alat'
     }];
 
     const ws = window.XLSX.utils.json_to_sheet(templateData);
