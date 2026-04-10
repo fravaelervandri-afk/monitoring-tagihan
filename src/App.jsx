@@ -482,10 +482,6 @@ export default function App() {
           const startRaw = row['Start Month'] || row['start month'];
           const start = parseIndonesianMonth(startRaw, currentYear);
 
-          const end = row['End Month'] || row['end month'] || '';
-          const desc = row['Keterangan'] || row['Keterangan Periode'] || '';
-          const jenis = row['PEKERJAAN'] || row['Jenis Tagihan'] || row['Jenis'] || 'Lainnya';
-
           let generatedPeriods = [];
           if (start && finalQuota > 0) {
               generatedPeriods = generateMonthsArray(start, finalQuota);
